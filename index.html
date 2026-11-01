@@ -1,0 +1,1176 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Laadplanner Thuisbatterij</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: one working column — controls, summary, day chart, quarter grid, import panel */
+:root{
+  --bg:#eef1f4; --surface:#ffffff; --line:#d5dbe2; --fg:#16202b; --muted:#5b6876;
+  --charge:#0f8a7e; --charge-soft:#d3efeb; --charge-ink:#ffffff;
+  --cheap:#2f6fb3; --dear:#c2562b; --bar:#b9c3ce; --neg:#7a5bc4;
+  --focus:#2f6fb3; --sun:#c98a00; --sun-soft:#fbefd2;
+  --f-display:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --f-body:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --f-data:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#10161d; --surface:#18212b; --line:#2a3542; --fg:#e6ebf0; --muted:#94a2b1;
+  --charge:#2fbfae; --charge-soft:#173a38; --charge-ink:#06231f;
+  --cheap:#6aa6e6; --dear:#e98a5f; --bar:#3a4756; --neg:#a98cf0; --focus:#6aa6e6; --sun:#f2b632; --sun-soft:#3a3018; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#10161d; --surface:#18212b; --line:#2a3542; --fg:#e6ebf0; --muted:#94a2b1;
+  --charge:#2fbfae; --charge-soft:#173a38; --charge-ink:#06231f;
+  --cheap:#6aa6e6; --dear:#e98a5f; --bar:#3a4756; --neg:#a98cf0; --focus:#6aa6e6; --sun:#f2b632; --sun-soft:#3a3018; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
+.wrap{max-width:980px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+h1{font-family:var(--f-display);font-weight:800;font-size:clamp(26px,5vw,36px);letter-spacing:-.02em;margin:0;text-wrap:balance}
+h2{font-family:var(--f-display);font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0}
+.head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:8px 20px}
+.dateline{font-size:17px;font-weight:600}
+.dateline small{display:block;font-weight:400;color:var(--muted);font-size:13px}
+.tag{display:inline-block;font-family:var(--f-data);font-size:11px;padding:2px 8px;border-radius:99px;border:1px solid var(--dear);color:var(--dear);margin-left:6px;vertical-align:middle}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.controls{display:grid;grid-template-columns:1.3fr 1fr;gap:18px}
+@media (max-width:680px){.controls{grid-template-columns:1fr}}
+.field{display:flex;flex-direction:column;gap:8px;min-width:0}
+label,.lbl{font-weight:600;font-size:14px}
+.pct-row{display:flex;align-items:center;gap:12px}
+input[type=range]{flex:1;accent-color:var(--charge);min-width:0}
+input[type=number],input[type=date],select,textarea{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px 9px}
+input[type=number]{width:84px;font-family:var(--f-data)}
+.pct-out{font-family:var(--f-data);font-size:13px;color:var(--muted)}
+.seg{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{font:inherit;font-weight:600;font-size:14px;padding:9px 8px;border:0;background:var(--bg);color:var(--fg);cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed=true]{background:var(--charge);color:var(--charge-ink)}
+.hint{font-size:13px;color:var(--muted);margin:0}
+details summary{cursor:pointer;font-size:14px;font-weight:600;color:var(--muted)}
+.settings{display:flex;flex-wrap:wrap;gap:16px;margin-top:10px}
+.settings .field{flex-direction:row;align-items:center;gap:8px}
+.settings label{font-weight:500}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+
+.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+@media (max-width:680px){.summary{grid-template-columns:repeat(2,1fr)}}
+.stat{background:var(--surface);padding:14px 16px;display:flex;flex-direction:column;gap:2px}
+.stat .k{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.stat .v{font-family:var(--f-data);font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+.stat .v small{font-size:13px;font-weight:400;color:var(--muted)}
+.blocks{display:flex;flex-wrap:wrap;gap:8px}
+.block{font-family:var(--f-data);font-size:15px;font-weight:600;background:var(--charge-soft);color:var(--fg);border-left:4px solid var(--charge);padding:6px 12px;border-radius:4px;font-variant-numeric:tabular-nums}
+.block{display:flex;flex-direction:column;gap:1px;min-width:132px}
+.block .bp{font-size:13px;font-weight:500;color:var(--charge)}
+.block small{font-weight:400;color:var(--muted);font-size:12px}
+#perOut{margin-top:-6px}
+.row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}
+.btn{font:inherit;font-weight:600;font-size:14px;padding:8px 14px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--fg);cursor:pointer}
+.btn.primary{background:var(--charge);border-color:var(--charge);color:var(--charge-ink)}
+.warn{color:var(--dear);font-size:13px;margin:0}
+
+.chart-box{overflow-x:auto}
+.chart{position:relative;height:170px;display:flex;align-items:stretch;gap:1px;min-width:520px}
+.chart .col{flex:1;position:relative}
+.chart .b{position:absolute;left:0;right:0;background:var(--bar);border-radius:1px}
+.chart .col.sel .b{background:var(--charge)}
+.chart .col.neg .b{background:var(--neg)}
+.chart .col.sel.neg .b{background:var(--charge)}
+.chart .zero{position:absolute;left:0;right:0;height:1px;background:var(--muted);opacity:.6}
+.axis{position:relative;height:18px;min-width:520px;font-family:var(--f-data);font-size:11px;color:var(--muted);margin-top:4px}
+.axis span{position:absolute;top:0;white-space:nowrap}
+.axis span.d{color:var(--fg);font-weight:600}
+.chart .col.mid::before{content:"";position:absolute;left:-1px;top:0;bottom:0;border-left:1px dashed var(--muted)}
+.grid .dayh{grid-column:1/-1;font-family:var(--f-body);font-weight:700;font-size:14px;padding:10px 0 2px}
+.grid .dayh:first-child{padding-top:0}
+.block.today{border-left-color:var(--cheap)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:13px;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+
+.grid{display:grid;grid-template-columns:44px repeat(4,1fr);gap:3px;font-family:var(--f-data);font-size:13px;font-variant-numeric:tabular-nums}
+.grid .h{color:var(--muted);align-self:center;font-size:12px}
+.grid .c{background:var(--bg);border-radius:4px;padding:5px 6px;display:flex;justify-content:space-between;align-items:baseline;gap:4px;min-width:0;border:1px solid transparent}
+.grid .c .t{color:var(--muted);font-size:11px}
+.grid .c.sel{background:var(--charge);color:var(--charge-ink);font-weight:600}
+.grid .c.sel .t{color:var(--charge-ink);opacity:.8}
+.grid .c.part{background:var(--charge-soft);color:var(--fg);border-color:var(--charge)}
+.grid .c.part .t{color:var(--muted)}
+.grid .c.lo:not(.sel):not(.part){color:var(--cheap);font-weight:600}
+.grid .c.hi:not(.sel):not(.part){color:var(--dear)}
+.grid .c.empty{visibility:hidden}
+@media (max-width:460px){.grid .c .t{display:none}.grid .c{justify-content:center}}
+
+textarea{width:100%;min-height:140px;font-family:var(--f-data);font-size:13px;resize:vertical}
+.imp{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+.imp .field{flex-direction:column}
+.status{font-size:14px;margin:0}
+.status.ok{color:var(--charge)} .status.err{color:var(--dear)}
+ol.steps{margin:0;padding-left:20px;font-size:14px;color:var(--muted);display:flex;flex-direction:column;gap:2px}
+.seg-sm{display:inline-grid;grid-template-columns:auto auto;margin-left:auto}
+.seg-sm button{padding:5px 10px;font-size:13px}
+.tariff{display:flex;flex-direction:column;gap:8px;margin-top:12px;font-size:14px}
+.tariff .settings{margin-top:0}
+.tariff input{width:76px}
+.sprice{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:13px;color:var(--muted)}
+.sprice b{font-family:var(--f-data);color:var(--fg);font-weight:600}
+.srcbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;font-size:14px;color:var(--muted);margin-top:-6px}
+.srcbar select{margin-left:auto}
+.srcdot{width:9px;height:9px;border-radius:50%;background:var(--bar);flex:none}
+.srcdot.auto{background:var(--charge)} .srcdot.paste{background:var(--cheap)} .srcdot.sample{background:var(--dear)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+/* sun panel */
+.sundays{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:680px){.sundays{grid-template-columns:1fr}}
+.sday{display:flex;flex-direction:column;gap:8px;min-width:0;padding:14px;border-radius:8px;background:var(--bg)}
+.sday h3{margin:0;font-family:var(--f-display);font-size:15px;font-weight:700}
+.sday h3 small{font-weight:400;color:var(--muted);margin-left:6px;font-size:13px}
+.snum{display:flex;flex-wrap:wrap;gap:6px 22px}
+.snum div{display:flex;flex-direction:column}
+.snum .v{font-family:var(--f-data);font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+.snum .k{font-size:12px;color:var(--muted)}
+.hours{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(30px,1fr);gap:3px;overflow-x:auto;padding-bottom:2px}
+.hr{display:flex;flex-direction:column;align-items:center;gap:3px;font-family:var(--f-data);font-size:11px;color:var(--muted)}
+.hr svg{width:22px;height:22px}
+.hr .bar{width:100%;height:26px;background:var(--surface);border-radius:3px;position:relative;overflow:hidden}
+.hr .bar i{position:absolute;left:0;right:0;bottom:0;background:var(--sun)}
+.ratio{font-size:14px;margin:0}
+/* battery panel */
+.bat{display:grid;grid-template-columns:auto 1fr;gap:16px 24px;align-items:center}
+@media (max-width:520px){.bat{grid-template-columns:1fr}}
+.soc{display:flex;align-items:center;gap:14px}
+.cell{width:120px;height:46px;border:2px solid var(--fg);border-radius:7px;position:relative;padding:3px;flex:none}
+.cell::after{content:"";position:absolute;right:-7px;top:13px;width:5px;height:16px;background:var(--fg);border-radius:0 3px 3px 0}
+.cell i{display:block;height:100%;background:var(--charge);border-radius:3px}
+.socv{font-family:var(--f-data);font-size:30px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1}
+.socv small{display:block;font-size:12px;font-weight:400;color:var(--muted);margin-top:4px;font-family:var(--f-body)}
+.batfacts{display:flex;flex-wrap:wrap;gap:6px 22px;font-size:14px}
+.batfacts b{font-family:var(--f-data);font-weight:600}
+.quick{display:flex;flex-wrap:wrap;gap:8px}
+.batref{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+#refreshMsg{margin:-6px 0 0}
+#refreshMsg.ok{color:var(--charge)} #refreshMsg.err{color:var(--dear)}
+.advice{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;font-size:14px;padding:12px;border-radius:6px;border:1px solid var(--charge);background:var(--charge-soft)}
+.advice b{font-family:var(--f-data)}
+.learn{font-size:14px;margin:0;padding:10px 12px;border-radius:6px;background:var(--sun-soft)}
+.learn b{font-family:var(--f-data)}
+.snum .k.marge{color:var(--fg);font-family:var(--f-data);font-size:12px}
+.ratio b{font-family:var(--f-data)}
+.own{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;font-size:14px}
+.own output{font-family:var(--f-data);font-weight:600}
+@media (prefers-reduced-motion:no-preference){.chart .b{transition:background .15s}}
+/* write-to-inverter panel */
+.tag-test{border-color:var(--cheap);color:var(--cheap);font-size:12px;vertical-align:6px}
+.tou-list{display:flex;flex-wrap:wrap;gap:8px;margin:0;padding:0;list-style:none}
+.tou-list li{font-family:var(--f-data);font-size:15px;font-weight:600;font-variant-numeric:tabular-nums;padding:6px 12px;border-radius:4px;background:var(--bg);border:1px solid var(--line)}
+.tou-list li small{display:block;font-family:var(--f-body);font-weight:400;font-size:12px;color:var(--muted)}
+.tou-rules{margin:0;padding-left:20px;font-size:14px;color:var(--muted);display:flex;flex-direction:column;gap:2px}
+.tou-confirm{display:flex;flex-direction:column;gap:10px;padding:14px;border-radius:8px;border:2px solid var(--charge);background:var(--charge-soft)}
+.tou-confirm p{margin:0;font-weight:600}
+.tou-actions{display:flex;flex-wrap:wrap;gap:8px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.tou-res{font-size:14px;margin:0;padding:12px;border-radius:6px;border:1px solid var(--line)}
+.tou-res.ok{border-color:var(--charge)} .tou-res.err{border-color:var(--dear)}
+.tou-res b{font-family:var(--f-data)}
+.tou-res ul{margin:6px 0 0;padding-left:20px}
+</style>
+
+<div class="wrap">
+  <header class="head">
+    <h1>Laadplanner Thuisbatterij</h1>
+    <div class="dateline" id="dateline"></div>
+  </header>
+  <div class="srcbar">
+    <span class="srcdot" id="srcDot"></span><span id="srcText">Prijzen laden…</span>
+    <select id="daySel" hidden aria-hidden="true" tabindex="-1"></select>
+  </div>
+
+  <section class="panel" aria-labelledby="h-bat" id="batPanel" hidden>
+    <div class="row"><h2 id="h-bat">Mijn batterij</h2>
+      <span class="batref"><span class="hint" id="batTime"></span><button type="button" class="btn" id="refreshBtn" hidden>Nu ophalen</button></span></div>
+    <p class="hint" id="refreshMsg" role="status" hidden></p>
+    <div class="bat">
+      <div class="soc"><div class="cell" aria-hidden="true"><i id="socFill"></i></div><div class="socv" id="socVal"></div></div>
+      <div class="batfacts" id="batFacts"></div>
+    </div>
+    <p class="hint" id="usage" hidden></p>
+    <div class="quick" id="quick"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-sun" id="sunPanel" hidden>
+    <h2 id="h-sun">Zon vandaag en morgen</h2>
+    <div class="sundays" id="sunDays"></div>
+    <p class="ratio" id="sunRatio"></p>
+    <p class="learn" id="learn" hidden></p>
+    <div class="advice" id="advice" hidden></div>
+    <div class="own">
+      <label for="ownKwh">Zonne-opbrengst vandaag</label>
+      <span><input type="number" id="ownKwh" min="0" max="200" step="0.1" placeholder="bv. 18,5"> kWh <span class="hint" id="ownSrc" hidden>(uit Growatt)</span></span>
+      <output id="ownOut" for="ownKwh"></output>
+    </div>
+    <p class="hint" id="sunSrc"></p>
+  </section>
+
+  <section class="panel" aria-labelledby="h-set">
+    <h2 id="h-set">Wat wil je laden?</h2>
+    <div class="controls">
+      <div class="field">
+        <label for="pct">Batterij bijladen met</label>
+        <div class="pct-row">
+          <input type="range" id="pctRange" min="1" max="100" step="1" value="50" aria-label="Te laden percentage">
+          <input type="number" id="pct" min="1" max="100" step="1" value="50"><span>%</span>
+        </div>
+        <p class="pct-out" id="pctOut"></p>
+      </div>
+      <div class="field">
+        <span class="lbl" id="modeLbl">Laadmodus</span>
+        <div class="seg" role="group" aria-labelledby="modeLbl">
+          <button type="button" id="mBlock" aria-pressed="true">Aaneensluitend</button>
+          <button type="button" id="mLoose" aria-pressed="false">Losse kwartieren</button>
+        </div>
+        <p class="hint" id="modeHint"></p>
+      </div>
+      <div class="field" id="horField" hidden>
+        <span class="lbl" id="horLbl">Plannen over</span>
+        <div class="seg" role="group" aria-labelledby="horLbl">
+          <button type="button" id="hNow" aria-pressed="true">Vanaf nu</button>
+          <button type="button" id="hDay" aria-pressed="false">Alleen morgen</button>
+        </div>
+        <p class="hint" id="horHint"></p>
+      </div>
+    </div>
+    <details>
+      <summary>Batterij-instellingen</summary>
+      <div class="settings">
+        <div class="field"><label for="cap">Capaciteit</label><input type="number" id="cap" min="1" max="100" step="0.1" value="13.5"><span>kWh</span></div>
+        <div class="field"><label for="rate">Laadsnelheid</label><input type="number" id="rate" min="1" max="100" step="0.5" value="18"><span>% per uur</span></div>
+        <div class="field"><label for="maxPer">Max. laadperiodes omvormer</label><input type="number" id="maxPer" min="1" max="48" step="1" value="9"></div>
+      </div>
+      <div class="tariff">
+        <b>Huidig tarief (all-in prijs)</b>
+        <span class="hint">All-in = (factor × beursprijs in €/MWh + toeslag) × btw, plus net en heffingen. Neem de cijfers over van de tariefkaart van je leverancier.</span>
+        <div class="settings">
+          <div class="field"><label for="tFactor">Factor</label><input type="number" id="tFactor" step="0.001" min="0"></div>
+          <div class="field"><label for="tToeslag">Toeslag</label><input type="number" id="tToeslag" step="0.01"><span>c€/kWh</span></div>
+          <div class="field"><label for="tBtw">Btw</label><input type="number" id="tBtw" step="1" min="0"><span>%</span></div>
+          <div class="field"><label for="tNet">Net + heffingen</label><input type="number" id="tNet" step="0.01" min="0"><span>c€/kWh</span></div>
+          <button type="button" class="btn" id="tReset">Standaardwaarden</button>
+        </div>
+        <b>Nieuw tarief</b>
+        <span class="hint">Geldt voor planningen vanaf de ingangsdatum. Standaard: dynamische formule 1,1192 × beursprijs + 13,94 €/MWh excl. btw (tariefkaart juni 2026). Net + heffingen staat gelijk aan het huidige tarief: controleer beide met je contract. Laat de datum leeg om het uit te zetten.</span>
+        <div class="settings">
+          <div class="field"><label for="t2From">Vanaf</label><input type="date" id="t2From"></div>
+          <div class="field"><label for="t2Factor">Factor</label><input type="number" id="t2Factor" step="0.0001" min="0"></div>
+          <div class="field"><label for="t2Toeslag">Toeslag</label><input type="number" id="t2Toeslag" step="0.001"><span>c€/kWh</span></div>
+          <div class="field"><label for="t2Btw">Btw</label><input type="number" id="t2Btw" step="1" min="0"><span>%</span></div>
+          <div class="field"><label for="t2Net">Net + heffingen</label><input type="number" id="t2Net" step="0.01" min="0"><span>c€/kWh</span></div>
+          <button type="button" class="btn" id="t2Reset">Standaardwaarden</button>
+        </div>
+        <b>Capaciteitstarief</b>
+        <span class="hint">Netbeheerder: 60,53 €/kW per jaar. Elke kW extra maandpiek kost ≈ € 5. Vul de piek van deze maand in uit de portaalsite van je netbeheerder.</span>
+        <div class="settings">
+          <div class="field"><label for="peakKw">Piek deze maand</label><input type="number" id="peakKw" step="0.001" min="0"><span>kW</span></div>
+          <div class="field"><label for="baseKw">Huisverbruik tijdens laden</label><input type="number" id="baseKw" step="0.1" min="0"><span>kW</span></div>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <section class="panel" aria-labelledby="h-res">
+    <div class="row">
+      <h2 id="h-res">Goedkoopste laadmomenten</h2>
+      <div class="seg seg-sm" role="group" aria-label="Prijzen tonen als"><button type="button" class="vMarket">Beursprijs</button><button type="button" class="vAllin">All-in</button></div>
+      <button type="button" class="btn" id="copyBtn">Kopieer planning</button>
+    </div>
+    <p class="hint" id="perOut"></p>
+    <div class="blocks" id="blocks"></div>
+    <p class="warn" id="resWarn" hidden></p>
+    <div class="summary" id="summary"></div>
+    <p class="hint" id="peakHint" hidden></p>
+    <p class="hint" id="costHint"></p>
+  </section>
+
+  <section class="panel" aria-labelledby="h-tou" id="touPanel">
+    <div class="row"><h2 id="h-tou">Naar batterij schrijven</h2><span class="hint" id="touSlots"></span></div>
+    <ul class="tou-list" id="touList"></ul>
+    <ol class="tou-rules">
+      <li>Alleen de begin- en eindtijden worden ingevuld, in periodes die nu op <b>Disable</b> staan.</li>
+      <li>Modus en Enable/Disable blijven ongewijzigd. Periodes op Enable en ongebruikte periodes worden niet aangeraakt.</li>
+      <li>Aanzetten doe je zelf in ShinePhone. Let op: TOU-periodes hebben geen datum, ze gelden elke dag zolang ze aan staan.</li>
+    </ol>
+    <p class="warn" id="touWarn" hidden></p>
+    <div class="tou-actions"><button type="button" class="btn primary" id="touBtn">Schrijf naar batterij…</button></div>
+    <div class="tou-confirm" id="touConfirm" hidden>
+      <p id="touQ"></p>
+      <div class="tou-actions">
+        <button type="button" class="btn primary" id="touYes">Ja, tijden wegschrijven</button>
+        <button type="button" class="btn" id="touNo">Annuleren</button>
+      </div>
+    </div>
+    <p class="hint" id="touMsg" role="status" hidden></p>
+    <div class="tou-res" id="touRes" hidden></div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-chart">
+    <div class="row"><h2 id="h-chart">Kwartierprijzen</h2>
+      <div class="seg seg-sm" role="group" aria-label="Prijzen tonen als"><button type="button" class="vMarket">Beursprijs</button><button type="button" class="vAllin">All-in</button></div>
+      <div class="legend"><span><i style="background:var(--charge)"></i>Laden</span><span><i style="background:var(--bar)"></i>Niet laden</span><span><i style="background:var(--neg)"></i>Negatieve prijs</span></div>
+    </div>
+    <div class="chart-box"><div class="chart" id="chart" role="img" aria-label="Staafdiagram van de kwartierprijzen"></div><div class="axis" id="axis"></div></div>
+    <div class="grid" id="grid"></div>
+    <p class="hint"><span id="unitHint">Prijzen in c€/kWh.</span> <span style="color:var(--cheap);font-weight:600">Blauw</span> = goedkoopste kwart van de dag, <span style="color:var(--dear)">oranje</span> = duurste kwart. Lichtgroen kader = laatste kwartier, maar gedeeltelijk nodig.</p>
+  </section>
+
+  <section class="panel" aria-labelledby="h-imp">
+    <h2 id="h-imp">Prijzen manueel plakken (reserve)</h2>
+    <p class="hint">Normaal staan de prijzen van morgen hier elke middag rond 14u30 automatisch. Ontbreken ze toch, dan kun je ze zelf plakken:</p>
+    <ol class="steps">
+      <li>Open kwhprice.eu → België → morgen.</li>
+      <li>Selecteer de tabel met kwartierprijzen en kopieer ze (Ctrl+C).</li>
+      <li>Plak ze hieronder en klik op <b>Prijzen inlezen</b>. Tijden en prijzen worden automatisch herkend.</li>
+    </ol>
+    <textarea id="paste" placeholder="00:00 – 00:15   8,41&#10;00:15 – 00:30   8,12&#10;…"></textarea>
+    <div class="imp">
+      <div class="field"><label for="day">Datum van de prijzen</label><input type="date" id="day"></div>
+      <div class="field"><label for="unit">Eenheid</label>
+        <select id="unit"><option value="ct">c€/kWh</option><option value="mwh">€/MWh</option><option value="eur">€/kWh</option></select></div>
+      <button type="button" class="btn primary" id="parseBtn">Prijzen inlezen</button>
+      <button type="button" class="btn" id="sampleBtn">Toon voorbeeld</button>
+    </div>
+    <p class="status" id="status" role="status"></p>
+  </section>
+
+  <section class="panel" aria-labelledby="h-gh" id="ghPanel">
+    <h2 id="h-gh">GitHub-koppeling</h2>
+    <p class="hint" id="ghState" role="status"></p>
+    <div class="settings">
+      <div class="field"><label for="ghOwner">Eigenaar</label><input type="text" id="ghOwner" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="gebruikersnaam"></div>
+      <div class="field"><label for="ghRepo">Privé-repo</label><input type="text" id="ghRepo" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="reponaam"></div>
+      <div class="field"><label for="ghToken">Sleutel</label><input type="password" id="ghToken" autocomplete="off" spellcheck="false" placeholder="github_pat_…"></div>
+      <button type="button" class="btn primary" id="ghSave">Opslaan en testen</button>
+      <button type="button" class="btn" id="ghForget">Sleutel wissen</button>
+    </div>
+    <p class="hint">De sleutel wordt alleen in deze browser op dit toestel bewaard, nergens anders. Telefoon kwijt? Trek de sleutel in op github.com → Settings → Developer settings → Personal access tokens.</p>
+  </section>
+</div>
+
+<script>
+// ---- GitHub bridge: lets this page run without Claude ----
+// The page was written against two small interfaces (a document store and a "start task" call).
+// This bridge provides both on top of the GitHub API, using a key that is stored only in this browser:
+//  - reading: the JSON files in data/ of the private repo
+//  - actions: starting the workflows batterij.yml and tou-schrijven.yml
+// The bridge never writes files and has no access to the Growatt login (that stays in the repo's secrets).
+(function(){
+  var KEY='lp_github';
+  function load(){ try{ return JSON.parse(localStorage.getItem(KEY)||'null'); }catch(e){ return null; } }
+  var C=load();
+  var API='https://api.github.com';
+  var ready = !!(C && C.owner && C.repo && C.token);
+  var statusFns=[];
+  function status(msg,cls){ statusFns.forEach(function(f){ f(msg,cls); }); }
+
+  function codeFor(st){ return st===401||st===403 ? 'needs_reauth' : st===404 ? 'not_found' : st===422 ? 'invalid' : 'network'; }
+  async function gh(path, opts){
+    opts=opts||{};
+    var h={'Accept':'application/vnd.github+json','Authorization':'Bearer '+C.token,'X-GitHub-Api-Version':'2022-11-28'};
+    for(var k in (opts.headers||{})) h[k]=opts.headers[k];
+    var r;
+    try{ r=await fetch(API+path,{method:opts.method||'GET',headers:h,body:opts.body,cache:'no-store'}); }
+    catch(e){ var n=new Error('Geen verbinding met GitHub.'); n.code='network'; throw n; }
+    if(!r.ok){
+      var m=''; try{ m=(await r.json()).message||''; }catch(e){}
+      var err=new Error('GitHub '+r.status+(m?' · '+m:'')); err.status=r.status; err.code=codeFor(r.status); throw err;
+    }
+    return r;
+  }
+  function repo(){ return '/repos/'+encodeURIComponent(C.owner)+'/'+encodeURIComponent(C.repo); }
+  async function raw(path){
+    var r=await gh(repo()+'/contents/'+path,{headers:{'Accept':'application/vnd.github.raw+json'}});
+    return r.json();
+  }
+  async function rawOrNull(path){ try{ return await raw(path); }catch(e){ if(e.status===404) return null; throw e; } }
+
+  // ---- documents ----
+  var DOCS={'sun/latest':'data/zon.json','growatt/latest':'data/growatt.json','verbruik/latest':'data/verbruik.json','history/log':'data/history.json'};
+  var docL={}, colL=[];
+  function snapDoc(v){ return {exists:v!=null, data:function(){ return v==null?undefined:v; }}; }
+  var HIDDEN={comAddress:1, gen_ctrl:1}; // known Growatt server quirk: watched in the background, never shown
+  var lastReq=null, lastTouResult=null;
+  function touResult(w, requestId){
+    if(!w) return null;
+    var other={}; var o=w.other_changed_fields||{};
+    for(var k in o) if(!HIDDEN[k]) other[k]=o[k];
+    var problems=w.problems||[];
+    return {request_id:requestId||'laatste', local_time:w.local_time, written:w.written||[], skipped:w.skipped||[],
+      problems:problems, other_changed_fields:other, error:w.error||null,
+      ok: !w.error && !problems.length && !Object.keys(other).length};
+  }
+  function emitDoc(path,v){ (docL[path]||[]).forEach(function(cb){ try{ cb(snapDoc(v)); }catch(e){} }); }
+  async function loadDoc(path){
+    if(path==='tou/result'){ var w=await rawOrNull('data/tou_write.json'); lastTouResult=touResult(w); emitDoc(path,lastTouResult); return; }
+    if(DOCS[path]) emitDoc(path, await rawOrNull(DOCS[path]));
+  }
+
+  // ---- prices: one file per day; the 10 most recent days, today and tomorrow refreshed each time ----
+  var prices={};
+  function iso(d){ return d.toISOString().slice(0,10); }
+  function brusselsDay(off){
+    var p=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Brussels',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+    var d=new Date(p+'T12:00:00Z'); d.setUTCDate(d.getUTCDate()+off); return iso(d);
+  }
+  async function loadPrices(full){
+    var want=[]; for(var i=-8;i<=1;i++) want.push(brusselsDay(i));
+    var fetchNow = full ? want : want.filter(function(d){ return d>=brusselsDay(0) || !(d in prices); });
+    await Promise.all(fetchNow.map(async function(d){ prices[d]=await rawOrNull('data/'+d+'.json'); }));
+    var docs=want.filter(function(d){ return prices[d] && Array.isArray(prices[d].prices); }).reverse()
+      .map(function(d){ var v=prices[d]; return {data:function(){ return v; }}; });
+    colL.forEach(function(cb){ try{ cb({docs:docs}); }catch(e){} });
+  }
+
+  var loading=false, lastLoad=0;
+  async function refreshAll(full){
+    if(!ready || loading) return; loading=true;
+    try{
+      await loadPrices(full);
+      await Promise.all(Object.keys(docL).map(loadDoc));
+      lastLoad=Date.now();
+      status('Verbonden met GitHub · bijgewerkt '+new Date().toLocaleTimeString('nl-BE',{hour:'2-digit',minute:'2-digit'}),'ok');
+    }catch(e){
+      status(e.code==='needs_reauth' ? 'De GitHub-sleutel werkt niet (verlopen of te weinig rechten). Maak een nieuwe en vul ze hieronder in.'
+        : e.code==='not_found' ? 'Repo niet gevonden. Controleer eigenaar en reponaam, en of de sleutel toegang heeft tot die repo.'
+        : 'Gegevens ophalen lukte niet: '+e.message, 'err');
+    }finally{ loading=false; }
+  }
+
+  var db={
+    collection:function(){ var q={orderBy:function(){return q;}, limit:function(){return q;},
+      onSnapshot:function(cb){ colL.push(cb); if(lastLoad) loadPrices(false).catch(function(){}); return function(){}; }}; return q; },
+    doc:function(path){ return {
+      onSnapshot:function(cb){ (docL[path]=docL[path]||[]).push(cb); if(ready) loadDoc(path).catch(function(){}); return function(){}; },
+      set:async function(data){ if(path==='tou/request'){ lastReq=data; return; } throw Object.assign(new Error('Alleen-lezen'),{code:'invalid'}); }
+    }; }
+  };
+
+  // ---- actions: start a workflow, follow it, then reload what it produced ----
+  async function dispatch(file, inputs){
+    var t0=Date.now();
+    await gh(repo()+'/actions/workflows/'+file+'/dispatches',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ref:'main', inputs:inputs||{}})});
+    return t0;
+  }
+  async function waitRun(file, t0, maxMs){
+    var end=Date.now()+maxMs;
+    while(Date.now()<end){
+      await new Promise(function(r){ setTimeout(r,8000); });
+      try{
+        var j=await (await gh(repo()+'/actions/workflows/'+file+'/runs?event=workflow_dispatch&per_page=5')).json();
+        var run=(j.workflow_runs||[]).find(function(x){ return Date.parse(x.created_at)>=t0-15000; });
+        if(run && run.status==='completed') return run;
+      }catch(e){}
+    }
+    return null;
+  }
+  var mcp={ callTool: async function(server, tool, args){
+    var id=args && args.trigger_id;
+    if(id==='batterij'){
+      var t0=await dispatch('batterij.yml');
+      waitRun('batterij.yml', t0, 4*60000).then(function(){ return Promise.all(['growatt/latest','history/log','verbruik/latest'].map(loadDoc)); });
+      return {};
+    }
+    if(id==='tou'){
+      var req=lastReq; if(!req || !Array.isArray(req.periods) || !req.periods.length) throw Object.assign(new Error('Geen periodes.'),{code:'invalid'});
+      var plan={periods:req.periods.map(function(p){ return {start:String(p.start), end:String(p.end)}; })};
+      var t1=await dispatch('tou-schrijven.yml',{plan:JSON.stringify(plan)});
+      waitRun('tou-schrijven.yml', t1, 5*60000).then(async function(run){
+        var w=null; try{ w=await rawOrNull('data/tou_write.json'); }catch(e){}
+        var fresh = w && w.fetched_utc && Date.parse(w.fetched_utc) >= t1-60000;
+        var res = fresh ? touResult(w, req.id)
+          : {request_id:req.id, ok:false, error: run ? 'De schrijfopdracht gaf geen resultaat; kijk in ShinePhone wat er staat.' : 'Na 5 minuten nog geen resultaat van GitHub; kijk in ShinePhone wat er staat.'};
+        lastTouResult=res; emitDoc('tou/result',res);
+      });
+      return {};
+    }
+    throw Object.assign(new Error('Onbekende opdracht.'),{code:'invalid'});
+  }};
+
+  window.claude = { use: async function(name){ if(!ready) return null; return name==='db' ? db : name==='mcp' ? mcp : null; } };
+
+  if(ready){
+    setTimeout(function(){ refreshAll(true); }, 100);
+    setInterval(function(){ if(document.visibilityState==='visible') refreshAll(false); }, 5*60000);
+    document.addEventListener('visibilitychange', function(){ if(document.visibilityState==='visible' && Date.now()-lastLoad>60000) refreshAll(false); });
+  }
+
+  // ---- settings panel ----
+  document.addEventListener('DOMContentLoaded', function(){
+    var $=function(id){ return document.getElementById(id); };
+    var st=$('ghState');
+    statusFns.push(function(msg,cls){ st.textContent=msg; st.className='hint'+(cls?' '+cls:''); });
+    if(!ready) status('Nog niet gekoppeld. Vul hieronder je GitHub-gegevens in.','err');
+    else status('Verbinden met GitHub…');
+    if(C){ $('ghOwner').value=C.owner||''; $('ghRepo').value=C.repo||''; }
+    $('ghSave').onclick=async function(){
+      var n={owner:$('ghOwner').value.trim(), repo:$('ghRepo').value.trim(), token:$('ghToken').value.trim() || (C&&C.token) || ''};
+      if(!n.owner||!n.repo||!n.token){ status('Vul eigenaar, repo en sleutel in.','err'); return; }
+      status('Sleutel testen…');
+      try{
+        var r=await fetch(API+'/repos/'+encodeURIComponent(n.owner)+'/'+encodeURIComponent(n.repo),{headers:{'Accept':'application/vnd.github+json','Authorization':'Bearer '+n.token},cache:'no-store'});
+        if(!r.ok){ status(r.status===404?'Repo niet gevonden met deze sleutel. Controleer de naam en of de sleutel toegang heeft tot die repo.':'GitHub weigert deze sleutel ('+r.status+').','err'); return; }
+      }catch(e){ status('Geen verbinding met GitHub.','err'); return; }
+      try{ localStorage.setItem(KEY, JSON.stringify(n)); }catch(e){ status('Deze browser laat niet toe om de sleutel te bewaren.','err'); return; }
+      status('Gekoppeld. De pagina laadt opnieuw…','ok'); setTimeout(function(){ location.reload(); }, 600);
+    };
+    $('ghForget').onclick=function(){ try{ localStorage.removeItem(KEY); }catch(e){} location.reload(); };
+  });
+})();
+
+</script>
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const store = {
+    get(k){ try{ const v = localStorage.getItem('lp_'+k); return v==null?null:JSON.parse(v); }catch(e){ return null; } },
+    set(k,v){ try{ localStorage.setItem('lp_'+k, JSON.stringify(v)); }catch(e){} }
+  };
+
+  // ---- dates (Europe/Brussels) ----
+  function brusselsToday(){
+    const p = new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Brussels',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+    return p; // YYYY-MM-DD
+  }
+  function addDays(iso,n){ const [y,m,d]=iso.split('-').map(Number); const dt=new Date(Date.UTC(y,m-1,d+n)); return dt.toISOString().slice(0,10); }
+  function longDate(iso){ const [y,m,d]=iso.split('-').map(Number); return new Date(y,m-1,d).toLocaleDateString('nl-BE',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); }
+  function shortDate(iso){ const [y,m,d]=iso.split('-').map(Number); return new Date(y,m-1,d).toLocaleDateString('nl-BE',{weekday:'short',day:'2-digit',month:'2-digit',year:'numeric'}); }
+  const tomorrow = addDays(brusselsToday(),1);
+
+  // ---- sample data (clearly marked) ----
+  function sampleDay(){
+    const out=[];
+    for(let i=0;i<96;i++){
+      const h=i/4;
+      let p = 9 + 4*Math.exp(-((h-8)**2)/3) + 7*Math.exp(-((h-19)**2)/4) - 10*Math.exp(-((h-13.5)**2)/5) - 2.5*Math.exp(-((h-3.5)**2)/3);
+      p += 0.6*Math.sin(i*1.7) + 0.4*Math.cos(i*0.9);
+      out.push({t:hhmm(i*15), p:Math.round(p*100)/100});
+    }
+    return out;
+  }
+  function hhmm(min){ min=((min%1440)+1440)%1440; return String(Math.floor(min/60)).padStart(2,'0')+':'+String(min%60).padStart(2,'0'); }
+  function toMin(t){ const [h,m]=t.split(':').map(Number); return h*60+m; }
+
+  // ---- state ----
+  const pasted = { prices: store.get('prices'), day: store.get('day') };   // manual fallback, this browser only
+  const autoDays = {};                                                      // date -> [{t,p}] from the daily feed
+  let state = {
+    prices: pasted.prices,      // [{t:'HH:MM', p: ct/kWh}]
+    day: pasted.day,
+    sample: false,
+    source: pasted.prices && pasted.prices.length ? 'paste' : 'sample',
+    autoPick: true,
+    pct: store.get('pct') ?? 50,
+    mode: store.get('mode') ?? 'block',
+    cap: store.get('cap') ?? 13.5,
+    rate: store.get('rate') ?? 18,
+    maxPer: store.get('maxPer') ?? 9,
+    baseKw: store.get('baseKw') ?? 0.5,
+    view: store.get('view') ?? 'market',
+    tariff: Object.assign({}, {factor:0.102, toeslag:0.485, btw:6, net:13.09}, store.get('tariff')||{}),
+    tariff2: Object.assign({}, {from:'2026-11-25', factor:0.11192, toeslag:1.394, btw:6, net:13.09}, store.get('tariff2')||{}),
+    peak: store.get('peak'),
+    horizon: store.get('horizon') ?? 'now'
+  };
+  if(!state.prices || !state.prices.length){ state.prices = sampleDay(); state.day = tomorrow; state.sample = true; }
+  if(!state.day) state.day = tomorrow;
+
+  // ---- parsing ----
+  function parse(text){
+    const re = /(\d{1,2})\s*[:u]\s*(\d{2})(?!\d)|(-?\d+(?:[.,]\d+)?)/g;
+    text = text.replace(/-(?=\d{1,2}\s*[:u]\s*\d{2})/g,' ');
+    const rows=[]; let pending=null, lastWasTime=false, m;
+    while((m=re.exec(text))){
+      if(m[1]!==undefined){
+        const h=+m[1], mi=+m[2];
+        if(h>24||mi>59){ lastWasTime=false; continue; }
+        const t=hhmm(h*60+mi);
+        if(pending && lastWasTime){ lastWasTime=true; continue; } // end of a range "00:00 – 00:15"
+        pending=t; lastWasTime=true;
+      } else {
+        if(pending){ rows.push({t:pending,p:parseFloat(m[3].replace(',','.'))}); pending=null; }
+        lastWasTime=false;
+      }
+    }
+    // hourly data -> expand to quarters
+    const isHourly = rows.length>=23 && rows.length<=25 && rows.every(r=>r.t.endsWith(':00'));
+    if(isHourly){ const q=[]; rows.forEach(r=>{ for(let k=0;k<4;k++) q.push({t:hhmm(toMin(r.t)+k*15),p:r.p}); }); return {rows:q,hourly:true}; }
+    return {rows,hourly:false};
+  }
+
+  // ---- planning timeline: one day, or "from now" = rest of today + tomorrow ----
+  let TL=[], MULTI=false;
+  const QMS=900000;
+  const tFmt=new Intl.DateTimeFormat('nl-BE',{timeZone:'Europe/Brussels',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
+  function dayWord(d){ const t=brusselsToday(); return d===t?'vandaag':d===addDays(t,1)?'morgen':shortDate(d); }
+  function canPlanFromNow(){
+    const t=brusselsToday();
+    return state.source==='auto' && (state.day===t || state.day===addDays(t,1)) && !!autoDays[t];
+  }
+  function buildTimeline(){
+    MULTI=false;
+    if(state.horizon==='now' && canPlanFromNow()){
+      const t=brusselsToday(), cut=Math.floor(Date.now()/QMS)*QMS+QMS; // next quarter that has not started
+      const items=[];
+      [t,addDays(t,1)].forEach(d=>(autoDays[d]||[]).forEach(r=>{ if(r.ms!=null && r.ms>=cut) items.push({t:r.t,p:r.p,day:d,ms:r.ms}); }));
+      if(items.length){ MULTI=true; return items; }
+    }
+    return (state.prices||[]).map(r=>({t:r.t,p:r.p,day:state.day,ms:r.ms}));
+  }
+  function startLabel(i){ return (MULTI?dayWord(TL[i].day)+' ':'')+TL[i].t; }
+  function endOf(i){
+    const x=TL[i], nx=TL[i+1];
+    if(nx && (x.ms==null || nx.ms===x.ms+QMS)) return (MULTI && nx.day!==x.day ? dayWord(nx.day)+' ' : '')+nx.t;
+    return x.ms!=null ? tFmt.format(new Date(x.ms+QMS)) : hhmm(toMin(x.t)+15);
+  }
+
+  // ---- planning ----
+  function plan(){
+    const P=TL, n=P.length;
+    const perQ = state.rate/4;                 // % per quarter
+    const pct = Math.max(0,Math.min(100,state.pct));
+    let need = Math.ceil(pct/perQ - 1e-9);
+    let warn='';
+    if(need>n){ need=n; warn='Niet genoeg kwartieren in deze periode om '+pct+'% te laden.'; }
+    const lastFrac = need>0 ? Math.min(1,(pct-(need-1)*perQ)/perQ) : 0;
+    let idx=[];
+    if(need>0){
+      if(state.mode==='loose'){
+        idx = pickLoose(P, need, Math.max(1, Math.round(state.maxPer)||9));
+      } else {
+        let best=Infinity,bs=0,s=0;
+        for(let i=0;i<n;i++){ s+=P[i].p; if(i>=need) s-=P[i-need].p; if(i>=need-1 && s<best-1e-9){best=s;bs=i-need+1;} }
+        for(let i=bs;i<bs+need;i++) idx.push(i);
+      }
+    }
+    // the partial quarter goes to the most expensive selected one
+    let partial=-1;
+    if(idx.length && lastFrac<0.999){ partial = idx.reduce((a,b)=>P[b].p>P[a].p||(P[b].p===P[a].p&&b>a)?b:a); }
+    const kwhQ = state.cap*perQ/100;
+    let kwh=0,cost=0;
+    idx.forEach(i=>{ const w = i===partial?lastFrac:1; kwh+=kwhQ*w; cost+=kwhQ*w*P[i].p/100; });
+    return {idx:new Set(idx), list:idx, partial, lastFrac, kwh, cost, need, warn, perQ};
+  }
+  // Cheapest set of `N` quarters that forms at most `K` separate charge periods (dynamic programming).
+  function pickLoose(P, N, K){
+    const n=P.length, S=(N+1)*(K+1)*2;
+    const dp=new Float64Array((n+1)*S).fill(Infinity), par=new Int8Array((n+1)*S).fill(-1);
+    const ix=(i,c,b,s)=>i*S+(c*(K+1)+b)*2+s;
+    dp[ix(0,0,0,0)]=0;
+    for(let i=0;i<n;i++) for(let c=0;c<=Math.min(i,N);c++) for(let b=0;b<=K;b++) for(let s=0;s<2;s++){
+      const v=dp[ix(i,c,b,s)]; if(v===Infinity) continue;
+      let t=ix(i+1,c,b,0); if(v<dp[t]-1e-12){ dp[t]=v; par[t]=s; }
+      if(c<N){ const nb=(s && !(i>0 && P[i].day!==P[i-1].day))?b:b+1; if(nb<=K){  /* a new day always starts a new inverter period */ t=ix(i+1,c+1,nb,1); const w=v+P[i].p; if(w<dp[t]-1e-12){ dp[t]=w; par[t]=s; } } }
+    }
+    let best=Infinity, bb=0, bs=0;
+    for(let b=0;b<=K;b++) for(let s=0;s<2;s++){ const v=dp[ix(n,N,b,s)]; if(v<best-1e-12){ best=v; bb=b; bs=s; } }
+    if(best===Infinity) return [];
+    const sel=[]; let c=N, b=bb, s=bs;
+    for(let i=n;i>0;i--){ const ps=par[ix(i,c,b,s)]; if(s===1){ sel.push(i-1); c--; if(ps===0 || (i-1>0 && P[i-1].day!==P[i-2].day)) b--; } s=ps; }
+    return sel.reverse();
+  }
+  function blocksOf(list){
+    const b=[]; list.forEach(i=>{ const last=b[b.length-1]; if(last && last.to===i-1 && TL[i].day===TL[i-1].day) last.to=i; else b.push({from:i,to:i}); }); return b;
+  }
+  // all-in price (supplier formula + network + levies), linear in the market price.
+  // The new tariff applies when the planning's last day is on or after its start date.
+  const TARIFF_DEFAULT={factor:0.102, toeslag:0.485, btw:6, net:13.09};
+  const TARIFF2_DEFAULT={from:'2026-11-25', factor:0.11192, toeslag:1.394, btw:6, net:13.09};
+  function planDay(){ return TL.length ? TL[TL.length-1].day : state.day; }
+  function tariffNow(){ const t2=state.tariff2; return (t2 && t2.from && planDay()>=t2.from) ? t2 : state.tariff; }
+  function disp(p){ if(state.view!=='allin') return p; const t=tariffNow(); return (t.factor*10*p + t.toeslag)*(1+t.btw/100) + t.net; }
+  function unit(){ return state.view==='allin' ? 'c€/kWh all-in' : 'c€/kWh'; }
+  function blockAvg(b){ const P=TL; let s=0; for(let i=b.from;i<=b.to;i++) s+=P[i].p; return s/(b.to-b.from+1); }
+  const fmt = (v,d=2) => v.toLocaleString('nl-BE',{minimumFractionDigits:d,maximumFractionDigits:d});
+
+  // ---- render ----
+  function render(){
+    TL=buildTimeline();
+    const P=TL, r=plan(), t=brusselsToday(), tom=addDays(t,1);
+    if(MULTI){
+      const last=P[P.length-1];
+      $('dateline').innerHTML = 'Planning vanaf '+dayWord(P[0].day)+' '+P[0].t+' tot '+(last.day===tom?'einde van morgen':'einde van vandaag')+
+        '<small>'+longDate(P[0].day)+(last.day!==P[0].day?' en '+longDate(last.day):'')+' · '+P.length+' kwartieren · marktprijs België (day-ahead)</small>';
+    } else {
+      $('dateline').innerHTML = 'Prijzen voor '+longDate(state.day) + (state.sample?'<span class="tag">voorbeeld</span>':'') +
+        '<small>'+P.length+' kwartieren · marktprijs België (day-ahead)</small>';
+    }
+    renderSource();
+    document.querySelectorAll('.vMarket').forEach(b=>b.setAttribute('aria-pressed',state.view!=='allin'));
+    document.querySelectorAll('.vAllin').forEach(b=>b.setAttribute('aria-pressed',state.view==='allin'));
+    const tUsed = tariffNow()===state.tariff2 ? 'nieuw tarief vanaf '+shortDate(state.tariff2.from) : 'huidig tarief';
+    $('unitHint').textContent = state.view==='allin' ? 'Prijzen in c€/kWh all-in ('+tUsed+': energie incl. btw + net + heffingen).' : 'Prijzen in c€/kWh (beursprijs, zonder btw, net en heffingen).';
+    $('costHint').textContent = state.view==='allin'
+      ? 'All-in = energie incl. btw + nettarief + heffingen per kWh ('+tUsed+'). Vaste kosten per jaar en het capaciteitstarief zitten er niet in. Geen rekening met laadverliezen.'
+      : 'Marktkost = enkel de beursprijs (day-ahead). Kies "All-in" om de toeslag van je leverancier, nettarieven, heffingen en btw mee te rekenen. De keuze van de goedkoopste kwartieren verandert daar niet door. Geen rekening met laadverliezen.';
+    const canNow=canPlanFromNow();
+    $('horField').hidden=!canNow;
+    $('hNow').setAttribute('aria-pressed',state.horizon==='now'); $('hDay').setAttribute('aria-pressed',state.horizon!=='now');
+    $('hDay').textContent = 'Alleen '+dayWord(state.day===t && autoDays[tom] ? tom : state.day);
+    $('horHint').textContent = MULTI ? 'De rest van vandaag telt mee: is het nu nog goedkoper, dan laad je meteen.' : 'Enkel de kwartieren van '+dayWord(state.day)+'.';
+    $('pctOut').textContent = '≈ '+fmt(state.cap*state.pct/100,1)+' kWh · '+r.need+' kwartier'+(r.need===1?'':'en')+' nodig ('+fmt(r.perQ,1)+'% per kwartier)';
+    $('mBlock').setAttribute('aria-pressed',state.mode==='block'); $('mLoose').setAttribute('aria-pressed',state.mode==='loose');
+    $('modeHint').textContent = state.mode==='block' ? 'Eén doorlopend laadblok met de laagste totale prijs.' : 'De goedkoopste kwartieren, gebundeld in hoogstens '+Math.round(state.maxPer)+' laadperiodes.';
+
+    const bl = blocksOf(r.list);
+    $('blocks').innerHTML = bl.length ? bl.map(b=>{
+      const q=b.to-b.from+1, a=blockAvg(b);
+      return '<span class="block'+(MULTI&&P[b.from].day===t?' today':'')+'">'+startLabel(b.from)+' – '+endOf(b.to)+'<span class="bp">'+fmt(disp(a))+' '+unit()+'</span><small>'+q+' kw.'+(q>1?' · gemiddeld':'')+'</small></span>';
+    }).join('') : '<span class="hint">Geen laadmomenten nodig.</span>';
+    const warns=[]; if(r.warn) warns.push(r.warn);
+    if(MULTI && !autoDays[tom]) warns.push('De prijzen van morgen zijn er nog niet (normaal vanaf 14u40). Deze planning gebruikt alleen de rest van vandaag.');
+    $('perOut').textContent = bl.length+' van max. '+Math.round(state.maxPer)+' laadperiodes';
+    $('resWarn').hidden=!warns.length; $('resWarn').textContent=warns.join(' ');
+
+    const avgAll = P.reduce((s,x)=>s+x.p,0)/P.length;
+    const avgSel = r.kwh>0 ? r.cost*100/r.kwh : 0;
+    const saving = r.kwh*(avgAll-avgSel)/100;
+    const word = MULTI?'periode':'dag';
+    $('summary').innerHTML =
+      stat('Laadduur', Math.floor(r.need*15/60)+'u'+String(r.need*15%60).padStart(2,'0'), r.need+' kwartieren')+
+      stat('Energie', fmt(r.kwh,2), 'kWh')+
+      stat('Gem. laadprijs', fmt(disp(avgSel),2), unit()+' · '+word+' '+fmt(disp(avgAll),2))+
+      (state.view==='allin'
+        ? stat('Kost laden', '€ '+fmt(r.kwh*disp(avgSel)/100,2), saving>0?'€ '+fmt(r.kwh*(disp(avgAll)-disp(avgSel))/100,2)+' onder gem. '+word:'')
+        : stat('Marktkost', '€ '+fmt(r.cost,2), saving>0?'€ '+fmt(saving,2)+' onder gem. '+word:''));
+
+    // capacity tariff check: charge power + household load vs this month's peak
+    (function(){
+      const el=$('peakHint'), pk=state.peak, mk=new Date().toISOString().slice(0,7);
+      if(!pk || pk.month!==mk || !(pk.kw>0) || !r.need){ el.hidden=!(pk && pk.month!==mk); if(pk && pk.month!==mk) el.textContent='Nieuwe maand: vul je piek van deze maand opnieuw in (Batterij-instellingen).'; return; }
+      const chargeKw = state.cap*state.rate/100, load = chargeKw + (state.baseKw ?? 0.5);
+      el.hidden=false;
+      el.textContent = load <= pk.kw
+        ? 'Capaciteitstarief: laden aan ± '+fmt(chargeKw,1)+' kW + '+fmt(state.baseKw ?? 0.5,1)+' kW huisverbruik ≈ '+fmt(load,1)+' kW blijft onder je maandpiek van '+fmt(pk.kw,2)+' kW. Geen extra kost.'
+        : 'Capaciteitstarief: laden aan ± '+fmt(chargeKw,1)+' kW + huisverbruik ≈ '+fmt(load,1)+' kW ligt boven je maandpiek van '+fmt(pk.kw,2)+' kW. Dat kost ≈ € '+fmt((load-pk.kw)*60.53/12,2)+' extra.';
+    })();
+
+    // chart
+    const min=Math.min(0,...P.map(x=>x.p)), max=Math.max(0.01,...P.map(x=>x.p)), span=max-min;
+    const zeroPct=(max/span)*100;
+    $('chart').innerHTML = '<div class="zero" style="top:'+zeroPct+'%"></div>' + P.map((x,i)=>{
+      const top = x.p>=0 ? ((max-x.p)/span)*100 : zeroPct;
+      const h = Math.max(0.6, Math.abs(x.p)/span*100);
+      const mid = i>0 && x.day!==P[i-1].day;
+      return '<div class="col'+(r.idx.has(i)?' sel':'')+(x.p<0?' neg':'')+(mid?' mid':'')+'" title="'+startLabel(i)+' – '+endOf(i)+': '+fmt(disp(x.p))+' '+unit()+'"><div class="b" style="top:'+top+'%;height:'+h+'%"></div></div>';
+    }).join('');
+    const step = P.length>140?6:3;
+    $('axis').innerHTML = P.map((x,i)=>{
+      if(!x.t.endsWith(':00')) return '';
+      const hr=+x.t.slice(0,2), dayStart = i>0 && x.day!==P[i-1].day;
+      if(!dayStart && hr%step) return '';
+      if(i>0 && x.t===P[i-1].t) return '';
+      return '<span'+(dayStart?' class="d"':'')+' style="left:'+(i/P.length*100)+'%">'+(dayStart?dayWord(x.day):String(hr).padStart(2,'0')+'u')+'</span>';
+    }).join('');
+
+    // grid: one row per hour, quarter columns by minute; day headers when planning across days
+    const sorted=P.map(x=>x.p).sort((a,b)=>a-b);
+    const lo=sorted[Math.floor(P.length*0.25)], hi=sorted[Math.floor(P.length*0.75)];
+    let html='', curKey=null, cells=0, curDay=null;
+    const pad=()=>{ if(curKey!==null) for(;cells<4;cells++) html+='<div class="c empty"></div>'; };
+    P.forEach((x,i)=>{
+      if(MULTI && x.day!==curDay){ pad(); curKey=null; html+='<div class="dayh">'+dayWord(x.day).replace(/^./,c=>c.toUpperCase())+' · '+longDate(x.day)+'</div>'; curDay=x.day; }
+      const h=x.t.slice(0,2), key=x.day+h, target=+x.t.slice(3)/15;
+      if(key!==curKey || cells>target){ pad(); html+='<div class="h">'+h+'u</div>'; curKey=key; cells=0; }
+      for(;cells<target;cells++) html+='<div class="c empty"></div>';
+      const cls=['c']; if(r.idx.has(i)) cls.push(i===r.partial?'part':'sel'); if(x.p<=lo) cls.push('lo'); if(x.p>=hi) cls.push('hi');
+      html+='<div class="'+cls.join(' ')+'" title="'+startLabel(i)+' – '+endOf(i)+'"><span class="t">:'+x.t.slice(3)+'</span><span>'+fmt(disp(x.p))+'</span></div>'; cells++;
+    });
+    pad();
+    $('grid').innerHTML=html;
+    state._plan=r;
+    if(typeof renderTou==='function') renderTou();
+    if(typeof renderSun==='function' && SUN) renderSun();
+  }
+  function stat(k,v,sub){ return '<div class="stat"><span class="k">'+k+'</span><span class="v">'+v+'</span><span class="hint">'+(sub||'&nbsp;')+'</span></div>'; }
+
+  // ---- events ----
+  function setPct(v){ v=Math.round(Math.max(1,Math.min(100,+v||1))); state.pct=v; $('pct').value=v; $('pctRange').value=v; store.set('pct',v); render(); }
+  $('pct').addEventListener('input',e=>{ if(e.target.value!=='') setPct(e.target.value); });
+  $('pctRange').addEventListener('input',e=>setPct(e.target.value));
+  $('mBlock').onclick=()=>{state.mode='block';store.set('mode','block');render();};
+  $('mLoose').onclick=()=>{state.mode='loose';store.set('mode','loose');render();};
+  $('cap').addEventListener('input',e=>{ const v=parseFloat(e.target.value); if(v>0){state.cap=v;store.set('cap',v);render();} });
+  $('rate').addEventListener('input',e=>{ const v=parseFloat(e.target.value); if(v>0){state.rate=v;store.set('rate',v);render();} });
+  document.querySelectorAll('.vMarket').forEach(b=>b.onclick=()=>{ state.view='market'; store.set('view','market'); render(); });
+  document.querySelectorAll('.vAllin').forEach(b=>b.onclick=()=>{ state.view='allin'; store.set('view','allin'); render(); });
+  const TF={tFactor:'factor',tToeslag:'toeslag',tBtw:'btw',tNet:'net'};
+  function fillTariff(){ for(const id in TF) $(id).value=state.tariff[TF[id]]; }
+  for(const id in TF) $(id).addEventListener('input',e=>{ const v=parseFloat(e.target.value); if(!isNaN(v)){ state.tariff[TF[id]]=v; store.set('tariff',state.tariff); render(); } });
+  $('tReset').onclick=()=>{ state.tariff=Object.assign({},TARIFF_DEFAULT); store.set('tariff',null); fillTariff(); render(); };
+  const TF2={t2Factor:'factor',t2Toeslag:'toeslag',t2Btw:'btw',t2Net:'net'};
+  function fillTariff2(){ for(const id in TF2) $(id).value=state.tariff2[TF2[id]]; $('t2From').value=state.tariff2.from||''; }
+  for(const id in TF2) $(id).addEventListener('input',e=>{ const v=parseFloat(e.target.value); if(!isNaN(v)){ state.tariff2[TF2[id]]=v; store.set('tariff2',state.tariff2); render(); } });
+  $('t2From').addEventListener('input',e=>{ state.tariff2.from=e.target.value||''; store.set('tariff2',state.tariff2); render(); });
+  $('t2Reset').onclick=()=>{ state.tariff2=Object.assign({},TARIFF2_DEFAULT); store.set('tariff2',null); fillTariff2(); render(); };
+  fillTariff();
+  fillTariff2();
+  (function(){ const mk=new Date().toISOString().slice(0,7); if(state.peak && state.peak.month===mk) $('peakKw').value=state.peak.kw; $('baseKw').value=state.baseKw; })();
+  $('peakKw').addEventListener('input',e=>{ const v=parseFloat(e.target.value); state.peak = v>0 ? {kw:v, month:new Date().toISOString().slice(0,7)} : null; store.set('peak',state.peak); render(); });
+  $('baseKw').addEventListener('input',e=>{ const v=parseFloat(e.target.value); if(v>=0){ state.baseKw=v; store.set('baseKw',v); render(); } });
+  $('hNow').onclick=()=>{ state.horizon='now'; store.set('horizon','now'); render(); };
+  $('hDay').onclick=()=>{ state.horizon='day'; store.set('horizon','day');
+    const t=brusselsToday(), tom=addDays(t,1); if(state.source==='auto' && state.day===t && autoDays[tom]){ state.day=tom; state.prices=autoDays[tom]; }
+    render(); };
+  // when planning "from now", drop quarters that have started
+  let lastQ=Math.floor(Date.now()/QMS);
+  setInterval(()=>{ const q=Math.floor(Date.now()/QMS); if(q!==lastQ){ lastQ=q; if(MULTI) render(); } },20000);
+  $('maxPer').addEventListener('input',e=>{ const v=parseInt(e.target.value,10); if(v>=1&&v<=48){state.maxPer=v;store.set('maxPer',v);render();} });
+
+  $('parseBtn').onclick=()=>{
+    const st=$('status'); const {rows,hourly}=parse($('paste').value);
+    if(rows.length<4){ st.className='status err'; st.textContent='Geen tijden met prijzen gevonden. Kopieer de tabel met de tijden (bv. 00:00) en de prijzen mee.'; return; }
+    const unit=$('unit').value; const f = unit==='mwh'?0.1:unit==='eur'?100:1;
+    const seen=new Set(); const clean=rows.filter(r=>!seen.has(r.t)&&seen.add(r.t)).map(r=>({t:r.t,p:Math.round(r.p*f*1000)/1000}));
+    state.prices=clean; state.day=$('day').value||tomorrow; state.sample=false; state.source='paste'; state.autoPick=false;
+    pasted.prices=clean; pasted.day=state.day;
+    store.set('prices',clean); store.set('day',state.day);
+    const mx=Math.max(...clean.map(r=>Math.abs(r.p)));
+    let msg=clean.length+' kwartieren ingelezen'+(hourly?' (uurprijzen omgezet naar kwartieren)':'')+' voor '+shortDate(state.day)+'.';
+    st.className='status ok';
+    if(![92,96,100].includes(clean.length)){ msg+=' Let op: een volledige dag telt normaal 96 kwartieren.'; st.className='status err'; }
+    if(unit==='ct' && mx>150){ msg+=' De prijzen lijken erg hoog: staan ze misschien in €/MWh?'; st.className='status err'; }
+    st.textContent=msg; render(); window.scrollTo({top:0,behavior:'smooth'});
+  };
+  $('sampleBtn').onclick=()=>{ state.prices=sampleDay(); state.day=tomorrow; state.sample=true; state.source='sample'; state.autoPick=false;$('status').className='status'; $('status').textContent='Voorbeeldprijzen getoond. Dit zijn geen echte tarieven.'; render(); };
+
+  $('copyBtn').onclick=async()=>{
+    const r=state._plan;
+    const head = MULTI ? 'vanaf '+shortDate(TL[0].day)+' '+TL[0].t : shortDate(state.day);
+    const lines=['Laadplanning '+head+' – '+state.pct+'% ('+(state.mode==='block'?'aaneensluitend':'losse kwartieren')+')']
+      .concat(blocksOf(r.list).map(b=>(MULTI?shortDate(TL[b.from].day)+' ':'')+TL[b.from].t+' – '+endOf(b.to).replace(/^(vandaag|morgen) /,'')+'  ('+fmt(disp(blockAvg(b)))+' '+unit()+')'))
+      .concat(['Gem. '+fmt(disp(r.kwh?r.cost*100/r.kwh:0))+' '+unit()+', '+(state.view==='allin'?'kost € '+fmt(r.kwh*disp(r.kwh?r.cost*100/r.kwh:0)/100):'marktkost € '+fmt(r.cost))]);
+    const txt=lines.join('\n'); const b=$('copyBtn');
+    try{ await navigator.clipboard.writeText(txt); b.textContent='Gekopieerd'; }
+    catch(e){ $('paste').value=txt; $('paste').select(); b.textContent='Geselecteerd in tekstvak'; }
+    setTimeout(()=>b.textContent='Kopieer planning',1800);
+  };
+
+  // ---- sun panel ----
+  let SUN=null;
+  const ICON={
+    sun:'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5" fill="var(--sun)"/><g stroke="var(--sun)" stroke-width="1.8" stroke-linecap="round"><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8"/></g></svg>',
+    part:'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="3.6" fill="var(--sun)"/><g stroke="var(--sun)" stroke-width="1.6" stroke-linecap="round"><path d="M9 2.5v1.6M2.5 9h1.6M4.4 4.4l1.1 1.1M13.6 4.4l-1.1 1.1"/></g><path d="M8 19.5h9.5a3.5 3.5 0 0 0 .3-7 4.6 4.6 0 0 0-8.8 1.2A2.9 2.9 0 0 0 8 19.5z" fill="var(--muted)"/></svg>',
+    cloud:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 18.5h11a4 4 0 0 0 .4-8 5.5 5.5 0 0 0-10.6 1.5A3.3 3.3 0 0 0 6.5 18.5z" fill="var(--muted)"/></svg>',
+    rain:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 14.5h11a4 4 0 0 0 .4-8 5.5 5.5 0 0 0-10.6 1.5A3.3 3.3 0 0 0 6.5 14.5z" fill="var(--muted)"/><g stroke="var(--cheap)" stroke-width="1.8" stroke-linecap="round"><path d="M8 17l-1 3M12 17l-1 3M16 17l-1 3"/></g></svg>',
+    snow:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 14.5h11a4 4 0 0 0 .4-8 5.5 5.5 0 0 0-10.6 1.5A3.3 3.3 0 0 0 6.5 14.5z" fill="var(--muted)"/><g fill="var(--cheap)"><circle cx="8" cy="18.5" r="1.2"/><circle cx="12" cy="20" r="1.2"/><circle cx="16" cy="18.5" r="1.2"/></g></svg>',
+    fog:'<svg viewBox="0 0 24 24" aria-hidden="true"><g stroke="var(--muted)" stroke-width="2" stroke-linecap="round"><path d="M4 9h16M6 13h12M4 17h16"/></g></svg>',
+    storm:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 13.5h11a4 4 0 0 0 .4-8 5.5 5.5 0 0 0-10.6 1.5A3.3 3.3 0 0 0 6.5 13.5z" fill="var(--muted)"/><path d="M12.5 14l-2.5 4h3l-2 4" stroke="var(--sun)" stroke-width="1.8" fill="none" stroke-linejoin="round"/></svg>'
+  };
+  function iconFor(code,min){
+    if(code>=95) return ['storm','onweer'];
+    if((code>=71&&code<=77)||code===85||code===86) return ['snow','sneeuw'];
+    if((code>=51&&code<=67)||(code>=80&&code<=82)) return ['rain','regen'];
+    if(code===45||code===48) return ['fog','mist'];
+    if(min>=40) return ['sun','zon'];
+    if(min>=10) return ['part','deels zon'];
+    return ['cloud','bewolkt'];
+  }
+  const int0 = v => Math.round(v).toLocaleString('nl-BE');
+  function renderSun(){
+    const panel=$('sunPanel');
+    if(!SUN || !Array.isArray(SUN.days) || !SUN.days.length){ panel.hidden=true; return; }
+    panel.hidden=false;
+    const days=SUN.days, t=brusselsToday();
+    $('sunDays').innerHTML = days.map(d=>{
+      const isToday=d.date===t;
+      const pvSub = isToday && !d.pv_measured_complete && d.pv_measured_mwh>0 ? 'gemeten tot nu '+int0(d.pv_measured_mwh)+' MWh' : (d.pv_measured_complete?'gemeten':'verwacht');
+      const hrs=(d.hours||[]).map(h=>{ const [ic,lbl]=iconFor(h.code,h.sun_min);
+        return '<div class="hr" title="'+h.h+'u: '+lbl+', '+h.sun_min+' min zon">'+ICON[ic]+'<div class="bar"><i style="height:'+Math.min(100,h.sun_min/60*100)+'%"></i></div>'+h.h+'</div>'; }).join('');
+      return '<div class="sday"><h3>'+dayWord(d.date).replace(/^./,c=>c.toUpperCase())+'<small>'+shortDate(d.date)+'</small></h3>'+
+        '<div class="snum"><div><span class="v">'+(d.sun_h!=null?fmt(d.sun_h,1):'–')+' u</span><span class="k">zon in '+esc(SUN.place||'je gemeente')+', van '+(d.daylight_h!=null?fmt(d.daylight_h,1):'–')+' u daglicht</span></div>'+
+        '<div><span class="v">'+(d.pv_mwh!=null?int0(d.pv_mwh):'–')+' MWh</span><span class="k">zonnestroom West-Vlaanderen · '+(d.pv_mwh!=null?pvSub:'Elia-cijfers niet beschikbaar')+'</span>'+
+          (d.pv_low_mwh!=null && d.pv_high_mwh!=null && !d.pv_measured_complete && d.pv_high_mwh>d.pv_low_mwh ? '<span class="k marge">marge '+int0(d.pv_low_mwh)+' – '+int0(d.pv_high_mwh)+' MWh</span>' : '')+'</div></div>'+
+        priceLine(d.date)+
+        (hrs?'<div class="hours" aria-label="Zon per uur">'+hrs+'</div>':'')+'</div>';
+    }).join('');
+    const d0=days[0], d1=days[1];
+    let ratio=null;
+    if(d0 && d1 && d0.pv_mwh>0){ ratio=d1.pv_mwh/d0.pv_mwh; $('sunRatio').innerHTML='Zonnestroom '+dayWord(d1.date)+' ≈ <b>'+Math.round(ratio*100)+'%</b> van '+dayWord(d0.date)+' (West-Vlaanderen).'; }
+    else $('sunRatio').textContent='';
+    state._sunRatio=ratio; state._sunDay0=d0&&d0.date; renderOwn();
+    const when=SUN.fetched_utc? new Date(SUN.fetched_utc).toLocaleString('nl-BE',{timeZone:'Europe/Brussels',weekday:'short',hour:'2-digit',minute:'2-digit'}):'';
+    $('sunSrc').textContent='Bronnen: Elia (zonnestroom per provincie) en Open-Meteo (zonuren voor '+esc(SUN.place||'je gemeente')+'). Bijgewerkt '+when+'. Marge: 80% kans dat de werkelijke opbrengst daartussen valt. De zonuren kunnen wat afwijken van de KMI-app.';
+  }
+  function priceLine(date){
+    const P=autoDays[date]; if(!P || !P.length) return '<div class="sprice">Tarieven nog niet beschikbaar</div>';
+    let lo=P[0], hi=P[0], sum=0; P.forEach(x=>{ if(x.p<lo.p) lo=x; if(x.p>hi.p) hi=x; sum+=x.p; });
+    const u=state.view==='allin'?' (all-in)':'';
+    return '<div class="sprice"><span>Laagste <b>'+fmt(disp(lo.p))+'</b> om '+lo.t+'</span><span>Gemiddeld <b>'+fmt(disp(sum/P.length))+'</b></span><span>Hoogste <b>'+fmt(disp(hi.p))+'</b> om '+hi.t+'</span><span>c€/kWh'+u+'</span></div>';
+  }
+  function renderOwn(){
+    const v=parseFloat($('ownKwh').value), r=state._sunRatio;
+    $('ownOut').textContent = (v>=0 && r!=null) ? '→ verwacht '+dayWord(addDays(state._sunDay0,1))+' ≈ '+fmt(v*r,1)+' kWh' : '';
+    state._pvRatioEst = (v>=0 && r!=null && addDays(state._sunDay0,1)===addDays(brusselsToday(),1)) ? v*r : null;
+    renderAdvice();
+  }
+  (function(){ const o=store.get('ownKwh'); if(o && o.day===brusselsToday()) $('ownKwh').value=o.v; })();
+  $('ownKwh').addEventListener('input',e=>{ store.set('ownKwh',{day:brusselsToday(),v:e.target.value}); renderOwn(); });
+
+  // ---- battery (Growatt, read-only data) ----
+  let GW=null, HIST=null;
+  function renderBat(){
+    const panel=$('batPanel');
+    if(!GW || GW.soc==null){ panel.hidden=true; return; }
+    panel.hidden=false;
+    const soc=Math.max(0,Math.min(100,GW.soc));
+    $('socFill').style.width=soc+'%';
+    const stateTxt = GW.charge_kw>0.05 ? 'laadt met '+fmt(GW.charge_kw,1)+' kW' : GW.discharge_kw>0.05 ? 'ontlaadt met '+fmt(GW.discharge_kw,1)+' kW' : 'in rust';
+    $('socVal').innerHTML=Math.round(soc)+'%<small>'+stateTxt+'</small>';
+    const t=GW.today||{}, isToday=t.date===brusselsToday();
+    const f=(v)=>v==null?'–':fmt(v,1);
+    $('batFacts').innerHTML = isToday ?
+      '<span>Zon vandaag <b>'+f(t.pv_kwh)+' kWh</b></span><span>Verbruik <b>'+f(t.load_kwh)+' kWh</b></span><span>Van het net <b>'+f(t.import_kwh)+' kWh</b></span><span>Batterij geladen <b>'+f(t.charge_kwh)+' kWh</b></span>' : '';
+    const when=GW.local_time||'';
+    const day=when.slice(0,10), hm=when.slice(11,16);
+    $('batTime').textContent='stand van '+(day===brusselsToday()?'vandaag':day? shortDate(day):'')+' '+hm;
+    const targets=[100,90,80].filter(x=>x>soc+1);
+    $('quick').innerHTML = targets.map(x=>'<button type="button" class="btn" data-t="'+x+'">Laad tot '+x+'% (+'+Math.round(x-soc)+'%)</button>').join('');
+    $('quick').querySelectorAll('button').forEach(b=>b.onclick=()=>setPct(+b.dataset.t-soc));
+    // fill own yield field automatically when empty
+    if(isToday && t.pv_kwh!=null){ $('ownKwh').value=t.pv_kwh; $('ownKwh').readOnly=true; $('ownSrc').hidden=false; store.set('ownKwh',null); renderOwn(); }
+    else { $('ownKwh').readOnly=false; $('ownSrc').hidden=true; }
+    checkRefreshDone();
+  }
+  let VB=null;
+  function renderUsage(){
+    const el=$('usage');
+    if(!VB || VB.weekday_avg_kwh==null){ el.hidden=true; return; }
+    el.hidden=false;
+    el.textContent='Gemiddeld huisverbruik (laatste '+Math.round((VB.days_used||0)/7)+' weken): weekdag '+fmt(VB.weekday_avg_kwh,1)+' kWh · weekend '+fmt(VB.weekend_avg_kwh,1)+' kWh'+(VB.night_kw!=null?' · ’s nachts ± '+fmt(VB.night_kw,2)+' kW':'')+'.';
+    if(VB.night_kw!=null && store.get('baseKw')==null && state.baseKw!==VB.night_kw){ state.baseKw=VB.night_kw; $('baseKw').value=VB.night_kw; render(); }
+    renderAdvice();
+  }
+  function renderAdvice(){
+    const el=$('advice'); if(!el) return;
+    const tom=addDays(brusselsToday(),1);
+    if(!VB || !VB.by_weekday_kwh){ el.hidden=true; return; }
+    const [y,m,d]=tom.split('-').map(Number); const wd=(new Date(y,m-1,d).getDay()+6)%7; // ma=0
+    const load=VB.by_weekday_kwh[wd] ?? (wd>=5?VB.weekend_avg_kwh:VB.weekday_avg_kwh);
+    const pv = state._pvLearned ?? state._pvRatioEst;
+    if(load==null || pv==null){ el.hidden=true; return; }
+    const short=Math.max(0, load-pv), pct=Math.min(100, Math.round(short/state.cap*100));
+    const dname=new Date(y,m-1,d).toLocaleDateString('nl-BE',{weekday:'long'});
+    el.hidden=false;
+    el.innerHTML='<span>Morgen ('+dname+'): verbruik ≈ <b>'+fmt(load,1)+' kWh</b> − zon ≈ <b>'+fmt(pv,1)+' kWh</b> = tekort ≈ <b>'+fmt(short,1)+' kWh</b>, dat is ≈ <b>'+pct+'%</b> van je batterij.</span>'+
+      (pct>0?'<button type="button" class="btn primary" id="advBtn">Laad '+pct+'%</button>':'')+
+      '<span class="hint">Schatting op basis van je gemiddeld verbruik op een '+dname+'. Hou rekening met wat er vanavond nog in de batterij zit.</span>';
+    const b=$('advBtn'); if(b) b.onclick=()=>setPct(pct);
+  }
+  function renderLearn(){
+    const el=$('learn');
+    if(!HIST || !SUN || !Array.isArray(HIST.days)){ el.hidden=true; return; }
+    const good=HIST.days.filter(d=>d.elia_complete && d.pv_kwh>0 && d.elia_wvl_mwh>0);
+    const tomorrowSun=(SUN.days||[]).find(d=>d.date===addDays(brusselsToday(),1));
+    if(good.length<3 || !tomorrowSun){ el.hidden=false;
+      el.innerHTML='Je installatie wordt nu elke dag gelogd. Vanaf 3 volledige dagen ('+good.length+'/3) voorspelt de app hier je eigen zonne-opbrengst voor morgen.'; return; }
+    const r=good.slice(-30).map(d=>d.pv_kwh/d.elia_wvl_mwh).sort((a,b)=>a-b);
+    const k=r[Math.floor(r.length/2)];
+    if(tomorrowSun.pv_mwh==null){ state._pvLearned=null; el.hidden=false; el.textContent='Geen Elia-voorspelling voor morgen beschikbaar, dus geen schatting van je eigen zonne-opbrengst.'; renderAdvice(); return; }
+    const exp=k*tomorrowSun.pv_mwh, lo=k*(tomorrowSun.pv_low_mwh||tomorrowSun.pv_mwh), hi=k*(tomorrowSun.pv_high_mwh||tomorrowSun.pv_mwh);
+    el.hidden=false;
+    state._pvLearned=exp; renderAdvice();
+    el.innerHTML='Geleerd uit '+good.length+' dagen: jouw panelen leveren ≈ <b>'+fmt(k*1000,1)+' kWh</b> per 1.000 MWh in West-Vlaanderen. Verwacht morgen: <b>'+fmt(exp,1)+' kWh</b> (marge '+fmt(lo,1)+' – '+fmt(hi,1)+' kWh).';
+  }
+
+  // ---- fetch the battery state on demand (starts a read-only scheduled task) ----
+  const BAT_TASK='batterij', STALE_MS=10*60000, WAIT_MS=4*60000;
+  let MCP=null, pendingSince=null, pendingTimer=null, tick=null;
+  const hm=ms=>tFmt.format(new Date(ms));
+  function gwAgeMs(){ return GW && GW.fetched_utc ? Date.now()-Date.parse(GW.fetched_utc) : Infinity; }
+  function refreshMsg(txt,cls){ const m=$('refreshMsg'); m.hidden=!txt; m.textContent=txt||''; m.className='hint'+(cls?' '+cls:''); }
+  function btn(txt){ $('refreshBtn').textContent=txt; }
+  function stopPending(){ pendingSince=null; clearTimeout(pendingTimer); clearInterval(tick); btn('Nu ophalen'); }
+  function checkRefreshDone(){
+    if(pendingSince && GW && GW.fetched_utc && Date.parse(GW.fetched_utc)>=pendingSince-60000){
+      stopPending();
+      refreshMsg('Nieuwe stand binnen: '+Math.round(GW.soc)+'% om '+hm(Date.parse(GW.fetched_utc))+'.','ok');
+    }
+  }
+  async function startRefresh(auto){
+    if(!MCP) return;
+    if(pendingSince){ // already running: say so instead of silently ignoring the tap
+      if(!auto) refreshMsg('Al bezig sinds '+hm(pendingSince)+'. De nieuwe stand verschijnt hier vanzelf (± 1 à 2 minuten).');
+      return;
+    }
+    if(auto){ let last=0; try{ last=+localStorage.getItem('lp_lastFire')||0; }catch(e){}
+      if(Date.now()-last<STALE_MS) return; }
+    try{ localStorage.setItem('lp_lastFire',String(Date.now())); }catch(e){}
+    pendingSince=Date.now();
+    const show=()=>{ const s=Math.round((Date.now()-pendingSince)/1000);
+      btn('Bezig… '+s+'s');
+      refreshMsg((auto?'Stand was ouder dan 10 minuten, ':'')+'batterijstand wordt opgehaald bij Growatt via GitHub (alleen lezen), gestart om '+hm(pendingSince)+'. Duurt meestal 1 à 3 minuten.'); };
+    show(); tick=setInterval(show,1000);
+    try{
+      await MCP.callTool('github','fire_trigger',{trigger_id:BAT_TASK});
+      pendingTimer=setTimeout(()=>{ if(pendingSince){ stopPending();
+        refreshMsg('Na 4 minuten nog geen nieuwe stand binnen. Tik opnieuw op "Nu ophalen", of kijk in GitHub bij Actions.','err'); } }, WAIT_MS);
+    }catch(e){
+      stopPending();
+      const c=e&&e.code, d=(e&&e.message)||String(e||'');
+      refreshMsg((c==='approval_required'||c==='not_in_manifest' ? 'Ophalen vraagt je toestemming. Tik op "Nu ophalen" en kies "Toestaan".'
+        : c==='needs_reauth' ? 'GitHub weigert de sleutel (verlopen of te weinig rechten). Vul een nieuwe in bij GitHub-koppeling.'
+        : 'Ophalen lukte niet.')+' (code: '+(c||'onbekend')+(d?' · '+d.slice(0,160):'')+')','err');
+    }
+  }
+  $('refreshBtn').onclick=()=>startRefresh(false);
+  (async()=>{
+    try{ MCP = (window.claude && window.claude.use) ? await window.claude.use('mcp') : null; }catch(e){ MCP=null; }
+    if(!MCP){ refreshMsg('Koppel eerst GitHub (onderaan de pagina). De stand wordt wel elk uur tussen ±12u15 en 18u15 automatisch bijgewerkt.'); return; }
+    $('refreshBtn').hidden=false;
+    // give the stored state a moment to arrive, then refresh if it is old
+    setTimeout(()=>{ if(gwAgeMs()>STALE_MS) startRefresh(true); }, 2500);
+  })();
+
+  // ---- write charge periods to the inverter (times only, always Disable) ----
+  var TOU_TASK='tou', TOU_WAIT_MS=6*60000;
+  var touDb=null, touRes=null, touPending=null, touTimer=null, touTick=null;
+  function mcpNow(){ try{ return MCP; }catch(e){ return null; } } // MCP is declared further up; render() can run before that line
+  function touPeriods(){
+    const r=state._plan; if(!r || !TL.length) return [];
+    return blocksOf(r.list).map(b=>{
+      const a=TL[b.from], z=TL[b.to];
+      const start=a.t;
+      let end = z.ms!=null ? tFmt.format(new Date(z.ms+QMS)) : hhmm(toMin(z.t)+15);
+      if(end==='00:00') end='23:59';
+      return {start, end, day:a.day};
+    });
+  }
+  function touProblems(ps){
+    const w=[];
+    if(state.sample) w.push('Dit zijn voorbeeldprijzen. Schrijven kan pas met echte prijzen.');
+    if(!ps.length) w.push('Er zijn geen laadmomenten om weg te schrijven.');
+    if(ps.length>9) w.push('Het plan heeft '+ps.length+' periodes; de omvormer heeft er maar 9.');
+    const s=[...ps].sort((a,b)=>toMin(a.start)-toMin(b.start));
+    for(let i=1;i<s.length;i++) if(toMin(s[i].start)<toMin(s[i-1].end)){
+      w.push('De periodes '+s[i-1].start+'–'+s[i-1].end+' en '+s[i].start+'–'+s[i].end+' overlappen op de klok (vandaag en morgen). TOU-periodes hebben geen datum, dus dit kan niet. Kies "Alleen morgen".'); break; }
+    return w;
+  }
+  function touMsg(t,cls){ const m=$('touMsg'); m.hidden=!t; m.textContent=t||''; m.className='hint'+(cls?' '+cls:''); }
+  function renderTou(){
+    const ps=touPeriods(), w=touProblems(ps);
+    $('touList').innerHTML = ps.map(p=>'<li>'+p.start+' – '+p.end+'<small>'+(MULTI?dayWord(p.day):'')+'</small></li>').join('');
+    $('touSlots').textContent = ps.length ? ps.length+' periode'+(ps.length===1?'':'s') : '';
+    $('touWarn').hidden=!w.length; $('touWarn').textContent=w.join(' ');
+    $('touBtn').disabled = !!w.length || !!touPending || !touDb || !mcpNow();
+    if(w.length) $('touConfirm').hidden=true;
+    const NA='Koppel eerst GitHub (onderaan de pagina).';
+    if(!touPending && (!touDb || !mcpNow())) touMsg(NA); else if($('touMsg').textContent===NA) touMsg('');
+  }
+  $('touBtn').onclick=()=>{
+    const ps=touPeriods(); if(touProblems(ps).length) return;
+    $('touQ').textContent='Deze '+ps.length+' periode'+(ps.length===1?'':'s')+' wegschrijven als tijden in vrije TOU-periodes (blijven op Disable): '+ps.map(p=>p.start+'–'+p.end).join(', ')+'?';
+    $('touConfirm').hidden=false; $('touYes').focus();
+  };
+  $('touNo').onclick=()=>{ $('touConfirm').hidden=true; };
+  function touStop(){ touPending=null; clearTimeout(touTimer); clearInterval(touTick); $('touBtn').textContent='Schrijf naar batterij…'; renderTou(); }
+  $('touYes').onclick=async()=>{
+    $('touConfirm').hidden=true;
+    const ps=touPeriods(); if(touProblems(ps).length || touPending) return;
+    const id='r'+Date.now();
+    touPending={id, since:Date.now()};
+    const show=()=>{ $('touBtn').textContent='Bezig… '+Math.round((Date.now()-touPending.since)/1000)+'s';
+      touMsg('Tijden worden weggeschreven en daarna opnieuw uitgelezen ter controle. Duurt meestal 2 à 4 minuten.'); };
+    show(); touTick=setInterval(show,1000); $('touBtn').disabled=true;
+    try{
+      await touDb.doc('tou/request').set({id, created_utc:new Date().toISOString(), periods:ps.map(p=>({start:p.start,end:p.end}))});
+      await mcpNow().callTool('github','fire_trigger',{trigger_id:TOU_TASK});
+      touTimer=setTimeout(()=>{ if(touPending){ touStop(); touMsg('Na 6 minuten nog geen resultaat. Kijk in ShinePhone na wat er staat voor je opnieuw probeert.','err'); } }, TOU_WAIT_MS);
+    }catch(e){
+      touStop();
+      const c=e&&e.code, d=(e&&e.message)||String(e||'');
+      touMsg((c==='approval_required'||c==='not_in_manifest' ? 'Dit vraagt je toestemming. Tik opnieuw en kies "Toestaan".'
+        : c==='needs_reauth' ? 'GitHub weigert de sleutel (verlopen of te weinig rechten). Vul een nieuwe in bij GitHub-koppeling.'
+        : 'Starten lukte niet. Er is niets weggeschreven.')+' (code: '+(c||'onbekend')+(d?' · '+d.slice(0,160):'')+')','err');
+    }
+  };
+  function renderTouResult(){
+    const r=touRes, el=$('touRes');
+    if(!r){ el.hidden=true; return; }
+    if(touPending && r.request_id===touPending.id){ touStop(); }
+    else if(touPending) return;
+    const when = r.local_time ? ' ('+r.local_time.slice(11)+')' : '';
+    let h;
+    if(r.error){ h='<b>Niets weggeschreven</b>'+when+'. '+esc(r.error); }
+    else {
+      const w=(r.written||[]).map(p=>'<li>Periode <b>'+p.slot+'</b>: '+p.start+' – '+p.end+' (Disable)</li>').join('');
+      const s=(r.skipped||[]).map(p=>'<li>'+p.start+' – '+p.end+' niet geschreven: '+esc(p.reden)+'</li>').join('');
+      const pr=(r.problems||[]).map(t=>'<li>'+esc(t)+'</li>').join('');
+      const oth=r.other_changed_fields ? Object.keys(r.other_changed_fields) : [];
+      h=(r.ok?'<b>Weggeschreven en gecontroleerd</b>':'<b>Weggeschreven, maar controle niet volledig in orde</b>')+when+'. Zet de periodes die je wilt gebruiken zelf op Enable in ShinePhone.'
+        +'<ul>'+w+s+pr+(oth.length?'<li>Andere velden lazen anders na het schrijven: '+esc(oth.join(', '))+'</li>':'')+'</ul>';
+    }
+    el.className='tou-res '+(r.ok?'ok':'err'); el.innerHTML=h; el.hidden=false;
+    if(!touPending) touMsg('');
+  }
+  function esc(t){ return String(t??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+  (async()=>{
+    touDb = (window.claude && window.claude.use) ? await window.claude.use('db') : null;
+    if(touDb){
+      touDb.doc('tou/result').onSnapshot(snap=>{ touRes = snap && snap.exists ? snap.data() : null; renderTouResult(); }, ()=>{});
+    }
+    // MCP is resolved by the battery block above; re-render once both are known
+    setTimeout(renderTou, 3000); renderTou();
+  })();
+
+  // ---- source bar + day picker ----
+  function renderSource(){
+    const dot=$('srcDot'), txt=$('srcText');
+    dot.className='srcdot '+state.source;
+    if(state.source==='auto'){
+      const isTomorrow = state.day===tomorrow, isToday = state.day===brusselsToday();
+      txt.textContent='Automatisch opgehaald'+(isTomorrow?' · prijzen van morgen':isToday?' · prijzen van vandaag':'');
+    } else if(state.source==='paste'){ txt.textContent='Zelf geplakte prijzen'; }
+    else { txt.textContent = Object.keys(autoDays).length ? 'Voorbeeldprijzen' : 'Nog geen automatische prijzen ontvangen. Je ziet voorbeeldprijzen.'; }
+    const sel=$('daySel'); const days=Object.keys(autoDays).sort().reverse();
+    const opts=days.map(d=>'<option value="auto:'+d+'">'+shortDate(d)+(d===tomorrow?' (morgen)':d===brusselsToday()?' (vandaag)':'')+'</option>');
+    if(pasted.prices && pasted.prices.length) opts.push('<option value="paste">Geplakt: '+shortDate(pasted.day||tomorrow)+'</option>');
+    sel.innerHTML=opts.join('');
+    sel.hidden = true; // one control decides the planning period: "Plannen over" 
+    sel.value = state.source==='auto' ? 'auto:'+state.day : state.source==='paste' ? 'paste' : '';
+  }
+  $('daySel').addEventListener('change',e=>{
+    const v=e.target.value; state.autoPick=false; state.sample=false;
+    if(v==='paste'){ state.prices=pasted.prices; state.day=pasted.day||tomorrow; state.source='paste'; }
+    else if(v.startsWith('auto:')){ const d=v.slice(5); state.prices=autoDays[d]; state.day=d; state.source='auto'; }
+    render();
+  });
+  function pickAuto(){
+    const days=Object.keys(autoDays).sort();
+    if(!days.length || !state.autoPick) return;
+    // prefer tomorrow, else the newest day that is today or later, else newest
+    const d = autoDays[tomorrow] ? tomorrow : (days.filter(x=>x>=brusselsToday()).pop() || days[days.length-1]);
+    if(pasted.prices && pasted.day && pasted.day>d && pasted.day>=brusselsToday()) return; // newer manual paste wins
+    state.prices=autoDays[d]; state.day=d; state.source='auto'; state.sample=false;
+    $('status').textContent='';
+  }
+  (async()=>{
+    const db = (window.claude && window.claude.use) ? await window.claude.use('db') : null;
+    if(!db){ renderSource(); return; }
+    db.collection('prices').orderBy('date','desc').limit(10).onSnapshot(snap=>{
+      for(const k of Object.keys(autoDays)) delete autoDays[k];
+      snap.docs.forEach(doc=>{ const b=doc.data(); if(b && Array.isArray(b.prices) && b.prices.length) autoDays[b.date]=b.prices.map(r=>({t:r.t,p:r.p,ms:r.start_utc?Date.parse(r.start_utc):null})); });
+      pickAuto(); render();
+    }, ()=>renderSource());
+    db.doc('sun/latest').onSnapshot(snap=>{ SUN = snap.exists ? snap.data() : null; renderSun(); renderLearn(); }, ()=>{});
+    db.doc('growatt/latest').onSnapshot(snap=>{ GW = snap.exists ? snap.data() : null; renderBat(); }, ()=>{});
+    db.doc('verbruik/latest').onSnapshot(snap=>{ VB = snap.exists ? snap.data() : null; renderUsage(); }, ()=>{});
+    db.doc('history/log').onSnapshot(snap=>{ HIST = snap.exists ? snap.data() : null; renderLearn(); }, ()=>{});
+  })();
+
+  // init
+  if(state.source==='sample') state.sample=true;
+  $('day').value=state.day; $('pct').value=state.pct; $('pctRange').value=state.pct; $('cap').value=state.cap; $('rate').value=state.rate; $('maxPer').value=state.maxPer;
+  if(state.sample){ $('status').textContent='Je ziet voorbeeldprijzen. Plak de echte prijzen van morgen om je planning te maken.'; }
+  render();
+})();
+</script>
+
+</body></html>
