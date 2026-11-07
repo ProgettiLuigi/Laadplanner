@@ -12,7 +12,9 @@ if [ -z "$KANAAL" ]; then
 fi
 
 echo "== Pakketten installeren =="
+# Alles bijwerken (anders kan curl stukgaan door een half bijgewerkte bibliotheek)
 pkg update -y
+apt-get -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold full-upgrade
 pkg install -y python termux-api curl
 
 echo "== Script downloaden =="
