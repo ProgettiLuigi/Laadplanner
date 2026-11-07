@@ -23,6 +23,7 @@ GRENS_W = 3900        # grens in watt
 DUUR_S = 120          # zo lang moet de afname boven de grens blijven (2 min)
 INTERVAL_S = 10       # om de 10 seconden uitlezen
 RUST_S = 15 * 60      # na een melding 15 min geen nieuwe melding
+TITEL = "Hoog verbruik - let op je piek"
 MAX_FOUTEN = 3        # na 3 mislukte metingen op rij: timer resetten (niet thuis)
 
 if len(sys.argv) < 2:
@@ -59,12 +60,16 @@ def lees():
 
 
 def recent_al_gemeld():
-    """True als er de laatste RUST_S seconden al een melding op het kanaal kwam."""
+    """True als er de laatste RUST_S seconden al een ALERT op het kanaal kwam
+    (testmeldingen en andere berichten tellen niet mee)."""
     try:
         url = f"{NTFY}/json?poll=1&since={RUST_S // 60}m"
         with urllib.request.urlopen(url, timeout=10) as r:
             for regel in r.read().decode().splitlines():
-                if regel.strip() and json.loads(regel).get("event") == "message":
+                if not regel.strip():
+                    continue
+                m = json.loads(regel)
+                if m.get("event") == "message" and m.get("title") == TITEL:
                     return True
     except Exception:
         pass
@@ -125,7 +130,7 @@ def main():
                     tekst += " (je maandpiek)." if grens > GRENS_W else "."
                     if gem is not None:
                         tekst += f" Kwartiergemiddelde: {float(gem) / 1000:.2f} kW."
-                    melding("Hoog verbruik - let op je piek", tekst)
+                    melding(TITEL, tekst)
                     laatste_melding = nu
             else:
                 boven_sinds = None
