@@ -36,8 +36,8 @@ def main():
             print(f"Je gsm lijkt niet op je thuiswifi te zitten (IP {ip}).", file=sys.stderr)
             sys.exit(1)
         prefix = ip.rsplit(".", 1)[0]
-    print(f"Zoeken op {prefix}.1 - {prefix}.254 ...", file=sys.stderr)
-    kandidaten = [f"{prefix}.{i}" for i in range(1, 255)]
+    print(f"Zoeken op {prefix}.0 - {prefix}.255 ...", file=sys.stderr)
+    kandidaten = [f"{prefix}.{i}" for i in range(0, 256)]  # ook .0: komt voor bij grotere netwerken
     with concurrent.futures.ThreadPoolExecutor(max_workers=64) as ex:
         gevonden = [ip for ip in ex.map(is_p1, kandidaten) if ip]
     if not gevonden:
