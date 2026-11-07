@@ -3,10 +3,16 @@
 # Leest de HomeWizard P1-dongle lokaal uit (alleen bereikbaar op je eigen wifi).
 # Melding als de netafname langer dan DUUR_S boven GRENS_W blijft.
 #
-# Gebruik:  python p1alert.py <IP-adres-van-de-P1-dongle>
-# Voorbeeld: python p1alert.py 192.168.1.50
+# Gebruik:
+#   Melding op deze gsm:          python p1alert.py <IP-dongle>
+#   Melding via ntfy (naar Lorenzo): python p1alert.py <IP-dongle> <ntfy-kanaal>
+# Met een ntfy-kanaal krijgt ALLEEN wie op dat kanaal geabonneerd is de melding;
+# de gsm waarop het script draait toont zelf niets.
+# Draait het op meerdere gsm's tegelijk, dan kijkt elk script eerst of er de
+# laatste 15 min al een melding op het kanaal kwam, zodat je er geen 4 krijgt.
 
 import json
+import random
 import subprocess
 import sys
 import time
@@ -19,10 +25,11 @@ RUST_S = 15 * 60      # na een melding 15 min geen nieuwe melding
 MAX_FOUTEN = 3        # na 3 mislukte metingen op rij: timer resetten (niet thuis)
 
 if len(sys.argv) < 2:
-    print("Gebruik: python p1alert.py <IP-adres-van-de-P1-dongle>")
+    print("Gebruik: python p1alert.py <IP-dongle> [ntfy-kanaal]")
     sys.exit(1)
 
 URL = f"http://{sys.argv[1]}/api/v1/data"
+NTFY = f"https://ntfy.sh/{sys.argv[2]}" if len(sys.argv) > 2 else None
 
 
 def lees():
@@ -36,7 +43,34 @@ def lees():
         return None, None
 
 
+def recent_al_gemeld():
+    """True als er de laatste RUST_S seconden al een melding op het kanaal kwam."""
+    try:
+        url = f"{NTFY}/json?poll=1&since={RUST_S // 60}m"
+        with urllib.request.urlopen(url, timeout=10) as r:
+            for regel in r.read().decode().splitlines():
+                if regel.strip() and json.loads(regel).get("event") == "message":
+                    return True
+    except Exception:
+        pass
+    return False
+
+
 def melding(titel, tekst):
+    if NTFY:
+        # Kleine willekeurige wachttijd: als 2 gsm's tegelijk meten,
+        # ziet de tweede de melding van de eerste en zwijgt.
+        time.sleep(random.uniform(0, 15))
+        if recent_al_gemeld():
+            return
+        try:
+            req = urllib.request.Request(
+                NTFY, data=tekst.encode("utf-8"), method="POST",
+                headers={"Title": titel, "Priority": "high", "Tags": "zap"})
+            urllib.request.urlopen(req, timeout=10).close()
+        except Exception:
+            pass
+        return
     subprocess.run(
         ["termux-notification", "--id", "p1alert", "--title", titel,
          "--content", tekst, "--priority", "high", "--sound",
