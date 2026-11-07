@@ -1,7 +1,8 @@
 #!/data/data/com.termux/files/usr/bin/env python
 # P1-alert voor het capaciteitstarief - draait in Termux op Android.
 # Leest de HomeWizard P1-dongle lokaal uit (alleen bereikbaar op je eigen wifi).
-# Melding als de netafname langer dan DUUR_S boven GRENS_W blijft.
+# Melding als de netafname langer dan DUUR_S boven de grens blijft.
+# Grens = hoogste van GRENS_W en de maandpiek van de lopende maand.
 #
 # Gebruik:
 #   Melding op deze gsm:          python p1alert.py <IP-dongle>
@@ -32,15 +33,29 @@ URL = f"http://{sys.argv[1]}/api/v1/data"
 NTFY = f"https://ntfy.sh/{sys.argv[2]}" if len(sys.argv) > 2 else None
 
 
+def maandpiek(d):
+    """Maandpiek (W) van de lopende maand volgens de slimme meter, anders None.
+    Tijdstempel van de meter: JJMMDDuummss, bv. 261107100000 = 7/11/2026 10:00."""
+    try:
+        piek = float(d["montly_power_peak_w"])
+        ts = str(int(d["montly_power_peak_timestamp"])).zfill(12)
+        if ts[:4] == time.strftime("%y%m"):
+            return piek
+    except Exception:
+        pass
+    return None
+
+
 def lees():
-    """Geeft (actueel vermogen W, kwartiergemiddelde W) of (None, None)."""
+    """Geeft (actueel vermogen W, kwartiergemiddelde W, maandpiek W) of Nones."""
     try:
         with urllib.request.urlopen(URL, timeout=5) as r:
             d = json.load(r)
         w = d.get("active_power_w")
-        return (float(w) if w is not None else None), d.get("active_power_average_w")
+        return ((float(w) if w is not None else None),
+                d.get("active_power_average_w"), maandpiek(d))
     except Exception:
-        return None, None
+        return None, None, None
 
 
 def recent_al_gemeld():
@@ -87,8 +102,11 @@ def main():
     print(f"P1-alert gestart: grens {GRENS_W} W gedurende {DUUR_S} s. Stoppen met Ctrl+C.")
 
     while True:
-        w, gem = lees()
+        w, gem, piek = lees()
         nu = time.time()
+        # Grens = hoogste van 3,9 kW en de maandpiek tot nu toe:
+        # onder je bestaande maandpiek blijven kost niets extra.
+        grens = max(GRENS_W, piek or 0)
 
         if w is None:
             # Niet op je wifi of dongle onbereikbaar: niets melden.
@@ -97,13 +115,14 @@ def main():
                 boven_sinds = None
         else:
             fouten = 0
-            if w > GRENS_W:
+            if w > grens:
                 if boven_sinds is None:
                     boven_sinds = nu
                 if nu - boven_sinds >= DUUR_S and nu - laatste_melding >= RUST_S:
                     minuten = int((nu - boven_sinds) // 60)
                     tekst = (f"Afname nu {w / 1000:.2f} kW, al {minuten} min "
-                             f"boven {GRENS_W / 1000:.1f} kW.")
+                             f"boven {grens / 1000:.2f} kW")
+                    tekst += " (je maandpiek)." if grens > GRENS_W else "."
                     if gem is not None:
                         tekst += f" Kwartiergemiddelde: {float(gem) / 1000:.2f} kW."
                     melding("Hoog verbruik - let op je piek", tekst)
